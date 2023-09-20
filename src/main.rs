@@ -6,7 +6,6 @@ use crate::transmitter::generate_audio_data;
 
 pub const AUDIO_BITS_PER_SAMPLE: u16 = 16;
 pub const AUDIO_SAMPLE_RATE: u32 = 192_000;
-pub const MAX_MAGNITUDE: f64 = ((2i32.pow(AUDIO_BITS_PER_SAMPLE as u32 - 1)) - 1) as f64;
 pub const TONE_LENGTH_US: u32 = 500;
 
 pub const BIT_TONE_FREQUENCY_ON: u32 = 10_000;
@@ -15,6 +14,9 @@ pub const BIT_TONE_FREQUENCY_NEXT: u32 = 14_000;
 
 pub const TRANSMISSION_START_FREQUENCY: u32 = 15_000;
 pub const TRANSMISSION_END_FREQUENCY: u32 = 16_000;
+
+pub const SAMPLE_MAGNITUDE: f64 = ((2i32.pow(AUDIO_BITS_PER_SAMPLE as u32 - 1)) - 1) as f64;
+pub const MAGNITUDE_THRESHOLD: f64 = 0.1;
 
 fn main() {}
 

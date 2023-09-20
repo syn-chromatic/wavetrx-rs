@@ -8,7 +8,8 @@ use hound::WavReader;
 
 use crate::{
     AUDIO_SAMPLE_RATE, BIT_TONE_FREQUENCY_NEXT, BIT_TONE_FREQUENCY_OFF, BIT_TONE_FREQUENCY_ON,
-    MAX_MAGNITUDE, TONE_LENGTH_US, TRANSMISSION_END_FREQUENCY, TRANSMISSION_START_FREQUENCY,
+    MAGNITUDE_THRESHOLD, SAMPLE_MAGNITUDE, TONE_LENGTH_US, TRANSMISSION_END_FREQUENCY,
+    TRANSMISSION_START_FREQUENCY,
 };
 
 fn calculate_tone_magnitude(samples: &[i32], target_frequency: u32) -> f64 {
@@ -28,7 +29,7 @@ fn calculate_tone_magnitude(samples: &[i32], target_frequency: u32) -> f64 {
     }
 
     let magnitude: f64 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
-    magnitude / (MAX_MAGNITUDE * samples.len() as f64)
+    magnitude / (SAMPLE_MAGNITUDE * samples.len() as f64)
 }
 
 fn print_magnitude(
@@ -38,19 +39,19 @@ fn print_magnitude(
     off_magnitude: f64,
     next_magnitude: f64,
 ) {
-    if start_magnitude >= 0.1 {
+    if start_magnitude >= MAGNITUDE_THRESHOLD {
         println!("Start: {}", start_magnitude);
     }
-    if end_magnitude >= 0.1 {
+    if end_magnitude >= MAGNITUDE_THRESHOLD {
         println!("End: {}", end_magnitude);
     }
-    if on_magnitude >= 0.1 {
+    if on_magnitude >= MAGNITUDE_THRESHOLD {
         println!("On: {}", on_magnitude);
     }
-    if off_magnitude >= 0.1 {
+    if off_magnitude >= MAGNITUDE_THRESHOLD {
         println!("Off: {}", off_magnitude);
     }
-    if next_magnitude >= 0.1 {
+    if next_magnitude >= MAGNITUDE_THRESHOLD {
         println!("Next: {}", next_magnitude);
     }
     println!();
@@ -86,11 +87,11 @@ impl ReceiverStates {
         next_magnitude: f64,
     ) -> bool {
         match selection {
-            States::Start => start_magnitude >= 0.1,
-            States::End => end_magnitude >= 0.1,
-            States::Next => next_magnitude >= 0.1,
-            States::On => on_magnitude >= 0.1,
-            States::Off => off_magnitude >= 0.1,
+            States::Start => start_magnitude >= MAGNITUDE_THRESHOLD,
+            States::End => end_magnitude >= MAGNITUDE_THRESHOLD,
+            States::Next => next_magnitude >= MAGNITUDE_THRESHOLD,
+            States::On => on_magnitude >= MAGNITUDE_THRESHOLD,
+            States::Off => off_magnitude >= MAGNITUDE_THRESHOLD,
         }
     }
 
@@ -102,15 +103,15 @@ impl ReceiverStates {
         off_magnitude: f64,
         next_magnitude: f64,
     ) -> Option<States> {
-        if start_magnitude >= 0.1 {
+        if start_magnitude >= MAGNITUDE_THRESHOLD {
             return Some(States::Start);
-        } else if end_magnitude >= 0.1 {
+        } else if end_magnitude >= MAGNITUDE_THRESHOLD {
             return Some(States::End);
-        } else if on_magnitude >= 0.1 {
+        } else if on_magnitude >= MAGNITUDE_THRESHOLD {
             return Some(States::On);
-        } else if off_magnitude >= 0.1 {
+        } else if off_magnitude >= MAGNITUDE_THRESHOLD {
             return Some(States::Off);
-        } else if next_magnitude >= 0.1 {
+        } else if next_magnitude >= MAGNITUDE_THRESHOLD {
             return Some(States::Next);
         }
         None
@@ -158,7 +159,7 @@ impl ReceiverStates {
                 }
             }
         } else {
-            if start_magnitude >= 0.1 {
+            if start_magnitude >= MAGNITUDE_THRESHOLD {
                 self.selection = Some(States::Start);
             }
         }

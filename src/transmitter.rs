@@ -7,7 +7,7 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 
 use crate::{
     AUDIO_BITS_PER_SAMPLE, AUDIO_SAMPLE_RATE, BIT_TONE_FREQUENCY_NEXT, BIT_TONE_FREQUENCY_OFF,
-    BIT_TONE_FREQUENCY_ON, MAX_MAGNITUDE, TONE_LENGTH_US, TRANSMISSION_END_FREQUENCY,
+    BIT_TONE_FREQUENCY_ON, SAMPLE_MAGNITUDE, TONE_LENGTH_US, TRANSMISSION_END_FREQUENCY,
     TRANSMISSION_START_FREQUENCY,
 };
 
@@ -34,7 +34,7 @@ impl WaveFile {
 
         for i in 0..num_samples {
             let sample: i32 =
-                ((MAX_MAGNITUDE / 2.0) * (2.0 * consts::PI * i as f64 / period).sin()) as i32;
+                (SAMPLE_MAGNITUDE * (2.0 * consts::PI * i as f64 / period).sin()) as i32;
             self.writer.write_sample(sample)?;
         }
 
