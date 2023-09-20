@@ -1,5 +1,10 @@
-use hound;
 use std::f64;
+use std::f64::consts;
+use std::fs::File;
+use std::io::BufReader;
+
+use hound;
+use hound::WavReader;
 
 use crate::{
     AUDIO_SAMPLE_RATE, BIT_TONE_FREQUENCY_NEXT, BIT_TONE_FREQUENCY_OFF, BIT_TONE_FREQUENCY_ON,
@@ -12,17 +17,17 @@ fn calculate_tone_magnitude(samples: &[i32], target_frequency: u32) -> f64 {
 
     let sample_count: f64 = samples.len() as f64;
     let k: u32 = (0.5 + (sample_count * target_frequency as f64) / AUDIO_SAMPLE_RATE as f64) as u32;
-    let w: f64 = 2.0 * f64::consts::PI * k as f64 / sample_count;
+    let w: f64 = 2.0 * consts::PI * k as f64 / sample_count;
     let cosine: f64 = f64::cos(w);
     let coeff: f64 = 2.0 * cosine;
 
     for &sample in samples.iter() {
-        let q0 = coeff * q1 - q2 + sample as f64;
+        let q0: f64 = coeff * q1 - q2 + sample as f64;
         q2 = q1;
         q1 = q0;
     }
 
-    let magnitude = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
+    let magnitude: f64 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
     magnitude / (MAX_MAGNITUDE * samples.len() as f64)
 }
 
@@ -162,15 +167,14 @@ impl ReceiverStates {
 }
 
 pub fn receiver(filename: &str) -> Vec<u8> {
-    let mut reader = hound::WavReader::open(filename).unwrap();
-    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-
     let chunk_size: usize = (AUDIO_SAMPLE_RATE as usize) / (TONE_LENGTH_US as usize * 4);
     println!("Chunk Size: {}", chunk_size);
+
+    let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
+    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+
     let mut sample_index: usize = 0;
-
     let mut receiver_states: ReceiverStates = ReceiverStates::new();
-
     let mut bits: Vec<u8> = Vec::new();
 
     while sample_index + chunk_size <= samples.len() {
@@ -218,7 +222,7 @@ pub fn receiver(filename: &str) -> Vec<u8> {
 fn bits_to_bytes(bits: &Vec<u8>) -> Vec<u8> {
     let mut bytes: Vec<u8> = Vec::new();
     for chunk in bits.chunks(8) {
-        let mut byte = 0u8;
+        let mut byte: u8 = 0u8;
         for (index, &bit) in chunk.iter().enumerate() {
             if bit == 1 {
                 byte |= 1 << (7 - index);
