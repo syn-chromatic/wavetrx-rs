@@ -7,15 +7,13 @@ use hound;
 use hound::WavReader;
 
 use rustfft::num_complex::Complex;
-use rustfft::num_traits::Zero;
 use rustfft::Fft;
-use rustfft::FftDirection;
 use rustfft::FftPlanner;
 
 use crate::{
-    AUDIO_SAMPLE_RATE, BIT_TONE_FREQUENCY_NEXT, BIT_TONE_FREQUENCY_OFF, BIT_TONE_FREQUENCY_ON,
-    MAGNITUDE_THRESHOLD, SAMPLE_MAGNITUDE, TONE_LENGTH_US, TRANSMISSION_END_FREQUENCY,
-    TRANSMISSION_START_FREQUENCY,
+    AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, MAGNITUDE_THRESHOLD,
+    SAMPLING_MAGNITUDE, TONE_GAP_US, TONE_LENGTH_US, TRANSMIT_END_FREQUENCY,
+    TRANSMIT_START_FREQUENCY,
 };
 
 fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
@@ -23,7 +21,7 @@ fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
     let mut q2: f32 = 0.0;
 
     let sample_count: f32 = samples.len() as f32;
-    let k: u32 = (0.5 + (sample_count * target_frequency as f32) / AUDIO_SAMPLE_RATE as f32) as u32;
+    let k: u32 = (0.5 + (sample_count * target_frequency as f32) / AUDIO_SR as f32) as u32;
     let w: f32 = 2.0 * consts::PI * k as f32 / sample_count;
     let cosine: f32 = f32::cos(w);
     let coeff: f32 = 2.0 * cosine;
@@ -54,9 +52,13 @@ impl FFTMagnitude {
         let mut buffer: Vec<Complex<f32>> = samples.iter().map(|&s| Complex::new(s, 0.0)).collect();
         self.fft.process(&mut buffer);
 
-        let bin: usize = (target_frequency * self.sample_size as u32 / AUDIO_SAMPLE_RATE) as usize;
+        let bin: usize = (target_frequency * self.sample_size as u32 / AUDIO_SR) as usize;
         let magnitude: f32 = (buffer[bin].norm_sqr()).sqrt() / self.sample_size as f32;
         magnitude
+    }
+
+    fn get_sample_size(&self) -> usize {
+        self.sample_size
     }
 }
 
@@ -198,34 +200,30 @@ impl ReceiverStates {
 fn get_minimum_chunk_size(target_frequency: u32, num_cycles: u32) -> usize {
     let time_for_one_cycle = 1.0 / target_frequency as f32;
     let chunk_time = num_cycles as f32 * time_for_one_cycle;
-    (chunk_time * AUDIO_SAMPLE_RATE as f32).ceil() as usize
+    (chunk_time * AUDIO_SR as f32).ceil() as usize
 }
 
 fn normalize_samples(samples: &[i32]) -> Vec<f32> {
     let samples: Vec<f32> = samples
         .iter()
-        .map(|&sample| sample as f32 / SAMPLE_MAGNITUDE as f32)
+        .map(|&sample| sample as f32 / SAMPLING_MAGNITUDE as f32)
         .collect();
     samples
 }
 
-fn get_starting_index(
-    samples: &[f32],
-    chunk_size: usize,
-    fft_magnitude: &FFTMagnitude,
-) -> Option<usize> {
+fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<usize> {
     let mut some_index: Option<usize> = None;
     let mut some_magnitude: Option<f32> = None;
     let mut tries: usize = 0;
     let max_tries: usize = 4;
+    let sample_size: usize = fft_magnitude.get_sample_size();
 
-    for i in 0..(samples.len() - chunk_size) {
-        let window: &[f32] = &samples[i..(i + chunk_size)];
-        let magnitude: f32 = fft_magnitude.calculate(window, TRANSMISSION_START_FREQUENCY);
-        // println!("Magnitude: {}", magnitude);
+    for i in 0..(samples.len() - sample_size) {
+        let window: &[f32] = &samples[i..(i + sample_size)];
+        let magnitude: f32 = fft_magnitude.calculate(window, TRANSMIT_START_FREQUENCY);
         if let Some(index_magnitude) = some_magnitude {
             if magnitude >= index_magnitude {
-                tries = 0;
+                // tries = 0;
                 some_index = Some(i);
                 some_magnitude = Some(magnitude);
             } else {
@@ -245,16 +243,20 @@ fn get_starting_index(
 }
 
 pub fn receiver(filename: &str) -> Option<Vec<u8>> {
-    let chunk_size: usize = ((AUDIO_SAMPLE_RATE * TONE_LENGTH_US) as usize / 1_000_000) / 4;
-    println!("Chunk Size: {}", chunk_size);
-    let fft_magnitude: FFTMagnitude = FFTMagnitude::new(chunk_size);
+    let tone_size: usize = (AUDIO_SR * TONE_LENGTH_US) as usize / 1_000_000;
+    let gap_size: usize = (AUDIO_SR * TONE_GAP_US) as usize / 1_000_000;
+
+    println!("Tone Size: {}", tone_size);
+    println!("Gap Size: {}", gap_size);
+
+    let fft_magnitude: FFTMagnitude = FFTMagnitude::new(tone_size);
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let samples: Vec<f32> = normalize_samples(&samples);
     println!("Samples: {}", samples.len());
 
-    let start_index: Option<usize> = get_starting_index(&samples, chunk_size, &fft_magnitude);
+    let start_index: Option<usize> = get_starting_index(&samples, &fft_magnitude);
 
     if let Some(index) = start_index {
         println!("Found start at sample index: {}", index);
@@ -262,17 +264,16 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
         let mut receiver_states: ReceiverStates = ReceiverStates::new();
         let mut bits: Vec<u8> = Vec::new();
 
-        while sample_index + chunk_size <= samples.len() {
-            let samples: &[f32] = &samples[sample_index..(sample_index + chunk_size)];
+        while sample_index + tone_size <= samples.len() {
+            let samples: &[f32] = &samples[sample_index..(sample_index + tone_size)];
 
-            let start_magnitude: f32 =
-                fft_magnitude.calculate(samples, TRANSMISSION_START_FREQUENCY);
-            let end_magnitude: f32 = fft_magnitude.calculate(samples, TRANSMISSION_END_FREQUENCY);
-            let on_magnitude: f32 = fft_magnitude.calculate(samples, BIT_TONE_FREQUENCY_ON);
-            let off_magnitude: f32 = fft_magnitude.calculate(samples, BIT_TONE_FREQUENCY_OFF);
-            let next_magnitude: f32 = fft_magnitude.calculate(samples, BIT_TONE_FREQUENCY_NEXT);
+            let start_magnitude: f32 = fft_magnitude.calculate(samples, TRANSMIT_START_FREQUENCY);
+            let end_magnitude: f32 = fft_magnitude.calculate(samples, TRANSMIT_END_FREQUENCY);
+            let on_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_ON);
+            let off_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_OFF);
+            let next_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_NEXT);
 
-            sample_index += chunk_size;
+            sample_index += tone_size + gap_size;
 
             let result: Option<States> = receiver_states.handle_magnitudes(
                 start_magnitude,
