@@ -301,13 +301,13 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
 
             // println!("Result: {:?}", result);
 
-            // print_magnitude(
-            //     start_magnitude,
-            //     end_magnitude,
-            //     on_magnitude,
-            //     off_magnitude,
-            //     next_magnitude,
-            // );
+            print_magnitude(
+                start_magnitude,
+                end_magnitude,
+                on_magnitude,
+                off_magnitude,
+                next_magnitude,
+            );
 
             if let Some(states) = result {
                 match states {

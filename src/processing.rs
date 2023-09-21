@@ -109,7 +109,7 @@ fn get_bin(target_frequency: f32, sample_size: usize, sample_rate: usize) -> usi
 
 #[test]
 fn test_func() {
-    let filename = "test1.wav";
+    let filename = "test4.wav";
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let spec: WavSpec = reader.spec();

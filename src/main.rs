@@ -20,7 +20,7 @@ pub const TRANSMIT_START_FREQUENCY: u32 = 15_000;
 pub const TRANSMIT_END_FREQUENCY: u32 = 16_000;
 
 pub const SAMPLING_MAGNITUDE: f32 = ((2i32.pow(AUDIO_BPS as u32 - 1)) - 1) as f32;
-pub const MAGNITUDE_THRESHOLD: f32 = 0.5;
+pub const MAGNITUDE_THRESHOLD: f32 = 0.1;
 
 fn main() {}
 
@@ -41,7 +41,7 @@ fn test_transmitter() {
 
 #[test]
 fn test_receiver() {
-    let filename: &str = "test3.wav";
+    let filename: &str = "test4.wav";
     let bits: Option<Vec<u8>> = receiver(filename);
     if let Some(bits) = bits {
         let string: String = bits_to_string(&bits);
