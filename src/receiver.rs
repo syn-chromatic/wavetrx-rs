@@ -190,6 +190,7 @@ fn get_starting_index(samples: &[f32], chunk_size: usize) -> Option<usize> {
     for i in 0..(samples.len() - chunk_size) {
         let window: &[f32] = &samples[i..(i + chunk_size)];
         let magnitude: f32 = tone_magnitude(window, TRANSMISSION_START_FREQUENCY);
+        // println!("Magnitude: {}", magnitude);
         if let Some(index_magnitude) = some_magnitude {
             if magnitude >= index_magnitude {
                 tries = 0;
