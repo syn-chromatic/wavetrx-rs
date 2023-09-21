@@ -6,9 +6,9 @@ use hound;
 use hound::{SampleFormat, WavSpec, WavWriter};
 
 use crate::{
-    AUDIO_BPS, AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF,
-    BIT_FREQUENCY_ON, SAMPLING_MAGNITUDE, TONE_GAP_US, TONE_LENGTH_US,
-    TRANSMIT_END_FREQUENCY, TRANSMIT_START_FREQUENCY,
+    AUDIO_BPS, AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON,
+    SAMPLING_MAGNITUDE, TONE_GAP_US, TONE_LENGTH_US, TRANSMIT_END_FREQUENCY,
+    TRANSMIT_START_FREQUENCY,
 };
 
 struct WaveFile {
@@ -74,6 +74,8 @@ pub fn generate_audio_data(filename: &str, data: &[u8]) -> Result<(), hound::Err
         }
     }
     wav.add_tone(TRANSMIT_END_FREQUENCY, TONE_LENGTH_US)?;
+    wav.add_tone(0, TONE_GAP_US)?;
+    wav.add_tone(BIT_FREQUENCY_NEXT, TONE_LENGTH_US)?;
     wav.add_tone(0, TONE_GAP_US)?;
     Ok(())
 }

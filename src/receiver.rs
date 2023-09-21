@@ -4,12 +4,14 @@ use std::io::BufReader;
 use std::sync::Arc;
 
 use hound;
-use hound::WavReader;
+use hound::{WavReader, WavSpec};
 
 use rustfft::num_complex::Complex;
 use rustfft::Fft;
 use rustfft::FftPlanner;
 
+use crate::filters::{apply_highpass_filter, apply_lowpass_filter};
+use crate::utils::save_audio;
 use crate::{
     AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, MAGNITUDE_THRESHOLD,
     SAMPLING_MAGNITUDE, TONE_GAP_US, TONE_LENGTH_US, TRANSMIT_END_FREQUENCY,
@@ -38,22 +40,37 @@ fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
 
 struct FFTMagnitude {
     fft: Arc<dyn Fft<f32>>,
+    sample_rate: usize,
     sample_size: usize,
 }
 
 impl FFTMagnitude {
-    fn new(sample_size: usize) -> Self {
+    fn new(sample_size: usize, spec: WavSpec) -> Self {
         let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
         let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(sample_size);
-        FFTMagnitude { fft, sample_size }
+        let sample_rate: usize = spec.sample_rate as usize;
+        FFTMagnitude {
+            fft,
+            sample_size,
+            sample_rate,
+        }
+    }
+
+    fn get_bin(&self, target_frequency: u32) -> usize {
+        let target_frequency: f32 = target_frequency as f32;
+        let sample_size: f32 = self.sample_size as f32;
+        let sample_rate: f32 = self.sample_rate as f32;
+        let bin: usize = ((target_frequency * sample_size) / sample_rate) as usize;
+        bin
     }
 
     fn calculate(&self, samples: &[f32], target_frequency: u32) -> f32 {
         let mut buffer: Vec<Complex<f32>> = samples.iter().map(|&s| Complex::new(s, 0.0)).collect();
         self.fft.process(&mut buffer);
 
-        let bin: usize = (target_frequency * self.sample_size as u32 / AUDIO_SR) as usize;
-        let magnitude: f32 = (buffer[bin].norm_sqr()).sqrt() / self.sample_size as f32;
+        let bin: usize = self.get_bin(target_frequency);
+        let normalization_factor: f32 = 2.0 / self.sample_size as f32;
+        let magnitude: f32 = (buffer[bin].norm_sqr()).sqrt() * normalization_factor;
         magnitude
     }
 
@@ -69,22 +86,10 @@ fn print_magnitude(
     off_magnitude: f32,
     next_magnitude: f32,
 ) {
-    if start_magnitude >= MAGNITUDE_THRESHOLD {
-        println!("Start: {}", start_magnitude);
-    }
-    if end_magnitude >= MAGNITUDE_THRESHOLD {
-        println!("End: {}", end_magnitude);
-    }
-    if on_magnitude >= MAGNITUDE_THRESHOLD {
-        println!("On: {}", on_magnitude);
-    }
-    if off_magnitude >= MAGNITUDE_THRESHOLD {
-        println!("Off: {}", off_magnitude);
-    }
-    if next_magnitude >= MAGNITUDE_THRESHOLD {
-        println!("Next: {}", next_magnitude);
-    }
-    println!();
+    println!(
+        "ST: {} | EN: {} | ON: {} | OFF: {} | NXT: {}",
+        start_magnitude, end_magnitude, on_magnitude, off_magnitude, next_magnitude
+    );
 }
 
 #[derive(Clone, Debug)]
@@ -203,10 +208,10 @@ fn get_minimum_chunk_size(target_frequency: u32, num_cycles: u32) -> usize {
     (chunk_time * AUDIO_SR as f32).ceil() as usize
 }
 
-fn normalize_samples(samples: &[i32]) -> Vec<f32> {
+fn normalize_samples(samples: &[f32]) -> Vec<f32> {
     let samples: Vec<f32> = samples
         .iter()
-        .map(|&sample| sample as f32 / SAMPLING_MAGNITUDE as f32)
+        .map(|&sample| sample / SAMPLING_MAGNITUDE)
         .collect();
     samples
 }
@@ -243,20 +248,31 @@ fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<u
 }
 
 pub fn receiver(filename: &str) -> Option<Vec<u8>> {
-    let tone_size: usize = (AUDIO_SR * TONE_LENGTH_US) as usize / 1_000_000;
-    let gap_size: usize = (AUDIO_SR * TONE_GAP_US) as usize / 1_000_000;
+    let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
+    let spec: WavSpec = reader.spec();
+    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
+
+    let tone_size: usize = (spec.sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
+    let gap_size: usize = (spec.sample_rate * TONE_GAP_US) as usize / 1_000_000;
 
     println!("Tone Size: {}", tone_size);
     println!("Gap Size: {}", gap_size);
 
-    let fft_magnitude: FFTMagnitude = FFTMagnitude::new(tone_size);
+    let fft_magnitude: FFTMagnitude = FFTMagnitude::new(tone_size, spec);
 
-    let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    // let highpass_frequency: f32 = 8_000.0;
+    // let lowpass_frequency: f32 = 18_000.0;
+
+    // apply_highpass_filter(&mut samples, highpass_frequency, spec);
+    // apply_lowpass_filter(&mut samples, lowpass_frequency, spec);
+    // save_audio("processed.wav", &samples, spec);
+
     let samples: Vec<f32> = normalize_samples(&samples);
     println!("Samples: {}", samples.len());
 
     let start_index: Option<usize> = get_starting_index(&samples, &fft_magnitude);
+    // let start_index = Some(0);
 
     if let Some(index) = start_index {
         println!("Found start at sample index: {}", index);
@@ -283,20 +299,20 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
                 next_magnitude,
             );
 
-            // // println!("Result: {:?}", result);
+            // println!("Result: {:?}", result);
 
-            print_magnitude(
-                start_magnitude,
-                end_magnitude,
-                on_magnitude,
-                off_magnitude,
-                next_magnitude,
-            );
+            // print_magnitude(
+            //     start_magnitude,
+            //     end_magnitude,
+            //     on_magnitude,
+            //     off_magnitude,
+            //     next_magnitude,
+            // );
 
             if let Some(states) = result {
                 match states {
                     States::Start => {}
-                    States::End => {}
+                    States::End => break,
                     States::Next => {}
                     States::On => bits.push(1),
                     States::Off => bits.push(0),
