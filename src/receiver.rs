@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::f32::consts;
 use std::fs::File;
 use std::io::BufReader;
@@ -247,12 +248,44 @@ fn get_minimum_chunk_size(target_frequency: u32, num_cycles: u32) -> usize {
     (chunk_time * AUDIO_SR as f32).ceil() as usize
 }
 
+fn positive_comparison(a: &&f32, b: &&f32) -> Ordering {
+    match (a.is_sign_positive(), b.is_sign_positive()) {
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (true, true) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+        (false, false) => Ordering::Equal,
+    }
+}
+
+fn negative_comparison(a: &&f32, b: &&f32) -> Ordering {
+    match (a.is_sign_negative(), b.is_sign_negative()) {
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (true, true) => b.partial_cmp(a).unwrap_or(Ordering::Equal),
+        (false, false) => Ordering::Equal,
+    }
+}
+
+fn get_max_magnitudes(samples: &[f32]) -> (f32, f32) {
+    let positive_magnitude: &f32 = samples.iter().max_by(positive_comparison).unwrap();
+    let negative_magnitude: &f32 = samples.iter().max_by(negative_comparison).unwrap();
+    (*positive_magnitude, *negative_magnitude)
+}
+
 fn normalize_samples(samples: &[f32]) -> Vec<f32> {
-    let samples: Vec<f32> = samples
-        .iter()
-        .map(|&sample| sample / SAMPLING_MAGNITUDE)
-        .collect();
-    samples
+    let mut normalized_samples: Vec<f32> = Vec::new();
+    let (positive, negative): (f32, f32) = get_max_magnitudes(samples);
+
+    for sample in samples.iter() {
+        let sample = if sample.is_sign_positive() {
+            *sample / positive
+        } else {
+            *sample / negative.abs()
+        };
+
+        normalized_samples.push(sample);
+    }
+    normalized_samples
 }
 
 fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<usize> {
@@ -311,7 +344,6 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
     println!("Samples: {}", samples.len());
 
     let start_index: Option<usize> = get_starting_index(&samples, &fft_magnitude);
-
     // let start_index = Some(0);
 
     if let Some(index) = start_index {
@@ -344,13 +376,13 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
 
             // println!("Result: {:?}", result);
 
-            // print_magnitude(
-            //     start_magnitude,
-            //     end_magnitude,
-            //     on_magnitude,
-            //     off_magnitude,
-            //     next_magnitude,
-            // );
+            print_magnitude(
+                start_magnitude,
+                end_magnitude,
+                on_magnitude,
+                off_magnitude,
+                next_magnitude,
+            );
             last_state = result.clone();
 
             if let Some(states) = result {

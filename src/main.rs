@@ -41,7 +41,8 @@ fn test_transmitter() {
 
 #[test]
 fn test_receiver() {
-    let filename: &str = "test4.wav";
+    // let filename: &str = "transmitted_audio.wav";
+    let filename = "test3.wav";
     let bits: Option<Vec<u8>> = receiver(filename);
     if let Some(bits) = bits {
         println!("{}", "-".repeat(20));
