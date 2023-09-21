@@ -52,7 +52,7 @@ fn test_receiver() {
         println!();
 
         let string: String = bits_to_string(&bits);
-        println!("Output: {}", string);
+        println!("Decoded: {}", string);
         println!();
         println!("{}", "-".repeat(20));
     }
