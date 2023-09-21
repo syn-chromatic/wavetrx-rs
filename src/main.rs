@@ -37,7 +37,7 @@ fn test_transmitter() {
 
 #[test]
 fn test_receiver() {
-    let filename: &str = "transmitted_recording1.wav";
+    let filename: &str = "transmitted_audio.wav";
     let bits: Option<Vec<u8>> = receiver(filename);
     if let Some(bits) = bits {
         let string: String = bits_to_string(&bits);
