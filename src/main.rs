@@ -9,8 +9,8 @@ use crate::transmitter::generate_audio_data;
 
 pub const AUDIO_BPS: u16 = 16;
 pub const AUDIO_SR: u32 = 48_000;
-pub const TONE_LENGTH_US: u32 = 10_000;
-pub const TONE_GAP_US: u32 = 10_000;
+pub const TONE_LENGTH_US: u32 = 1000;
+pub const TONE_GAP_US: u32 = 1000;
 
 pub const BIT_FREQUENCY_ON: u32 = 10_000;
 pub const BIT_FREQUENCY_OFF: u32 = 12_000;
@@ -44,14 +44,15 @@ fn test_receiver() {
     let filename: &str = "test4.wav";
     let bits: Option<Vec<u8>> = receiver(filename);
     if let Some(bits) = bits {
-        let string: String = bits_to_string(&bits);
         println!("{}", "-".repeat(20));
-        println!("Output: {}", string);
-
         println!();
-        for bit in bits {
+        for bit in bits.iter() {
             print!("{}", bit);
         }
+        println!();
+
+        let string: String = bits_to_string(&bits);
+        println!("Output: {}", string);
         println!();
         println!("{}", "-".repeat(20));
     }

@@ -92,111 +92,150 @@ fn print_magnitude(
     );
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum States {
     Start,
     End,
     Next,
-    On,
-    Off,
+    Bit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ReceiverOutput {
+    Bit(u8),
+    End,
+    Error,
+}
+
+struct ReceiverMagnitudes {
+    start: f32,
+    end: f32,
+    next: f32,
+    on: f32,
+    off: f32,
+}
+
+impl ReceiverMagnitudes {
+    fn new(start: f32, end: f32, next: f32, on: f32, off: f32) -> Self {
+        ReceiverMagnitudes {
+            start,
+            end,
+            next,
+            on,
+            off,
+        }
+    }
+
+    fn evaluate(&self, state: &States) -> bool {
+        match state {
+            States::Start => self.start >= MAGNITUDE_THRESHOLD,
+            States::End => self.end >= MAGNITUDE_THRESHOLD,
+            States::Next => self.next >= MAGNITUDE_THRESHOLD,
+            States::Bit => self.on >= MAGNITUDE_THRESHOLD || self.off >= MAGNITUDE_THRESHOLD,
+        }
+    }
+
+    fn get_bit(&self) -> u8 {
+        if self.on > self.off {
+            return 1;
+        }
+        0
+    }
 }
 
 #[derive(Debug)]
 struct ReceiverStates {
     selection: Option<States>,
+    expectation: States,
+    end_selection: Option<States>,
+    end_expectation: Option<States>,
 }
 
 impl ReceiverStates {
     fn new() -> Self {
         let selection: Option<States> = None;
-        ReceiverStates { selection }
-    }
-
-    fn is_same_selection(
-        &self,
-        selection: &States,
-        start_magnitude: f32,
-        end_magnitude: f32,
-        on_magnitude: f32,
-        off_magnitude: f32,
-        next_magnitude: f32,
-    ) -> bool {
-        match selection {
-            States::Start => start_magnitude >= MAGNITUDE_THRESHOLD,
-            States::End => end_magnitude >= MAGNITUDE_THRESHOLD,
-            States::Next => next_magnitude >= MAGNITUDE_THRESHOLD,
-            States::On => on_magnitude >= MAGNITUDE_THRESHOLD,
-            States::Off => off_magnitude >= MAGNITUDE_THRESHOLD,
+        let expectation: States = States::Start;
+        let end_selection: Option<States> = None;
+        let end_expectation: Option<States> = None;
+        ReceiverStates {
+            selection,
+            expectation,
+            end_selection,
+            end_expectation,
         }
     }
 
-    fn get_magnitude_selection(
-        &self,
-        start_magnitude: f32,
-        end_magnitude: f32,
-        on_magnitude: f32,
-        off_magnitude: f32,
-        next_magnitude: f32,
-    ) -> Option<States> {
-        if start_magnitude >= MAGNITUDE_THRESHOLD {
-            return Some(States::Start);
-        } else if end_magnitude >= MAGNITUDE_THRESHOLD {
-            return Some(States::End);
-        } else if on_magnitude >= MAGNITUDE_THRESHOLD {
-            return Some(States::On);
-        } else if off_magnitude >= MAGNITUDE_THRESHOLD {
-            return Some(States::Off);
-        } else if next_magnitude >= MAGNITUDE_THRESHOLD {
-            return Some(States::Next);
+    fn set_expectation(&mut self) {
+        if self.expectation == States::Start || self.expectation == States::Bit {
+            self.selection = Some(self.expectation.clone());
+            self.expectation = States::Next;
+        } else if self.expectation == States::Next {
+            if let Some(selection) = &self.selection {
+                if *selection == States::Start || *selection == States::Bit {
+                    self.expectation = States::Bit;
+                }
+            }
+        }
+    }
+
+    fn evaluate_end(&mut self, magnitudes: &ReceiverMagnitudes) -> bool {
+        if self.expectation == States::Bit {
+            if let Some(selection) = &self.selection {
+                if *selection == States::Bit {
+                    if magnitudes.evaluate(&States::End) {
+                        self.end_selection = Some(States::End);
+                        self.end_expectation = Some(States::Next);
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn resolve_end(
+        &mut self,
+        magnitudes: &ReceiverMagnitudes,
+        end_evaluation: bool,
+        evaluation: bool,
+    ) -> Option<ReceiverOutput> {
+        if !end_evaluation {
+            if let Some(end_expectation) = &self.end_expectation {
+                let end_evaluation = magnitudes.evaluate(end_expectation);
+                if end_evaluation && !evaluation {
+                    return Some(ReceiverOutput::End);
+                } else {
+                    self.end_selection = None;
+                    self.end_expectation = None;
+                }
+            }
         }
         None
     }
 
-    fn handle_magnitudes(
-        &mut self,
-        start_magnitude: f32,
-        end_magnitude: f32,
-        on_magnitude: f32,
-        off_magnitude: f32,
-        next_magnitude: f32,
-    ) -> Option<States> {
-        if let Some(current_selection) = &self.selection {
-            let magnitude_selection: Option<States> = self.get_magnitude_selection(
-                start_magnitude,
-                end_magnitude,
-                on_magnitude,
-                off_magnitude,
-                next_magnitude,
-            );
+    fn handle_magnitudes(&mut self, magnitudes: &ReceiverMagnitudes) -> Option<ReceiverOutput> {
+        let end_evaluation: bool = self.evaluate_end(magnitudes);
+        let evaluation: bool = magnitudes.evaluate(&self.expectation);
 
-            if let Some(magnitude_selection) = magnitude_selection {
-                if self.is_same_selection(
-                    current_selection,
-                    start_magnitude,
-                    end_magnitude,
-                    on_magnitude,
-                    off_magnitude,
-                    next_magnitude,
-                ) {
-                    return None;
-                }
+        let end_resolve: Option<ReceiverOutput> =
+            self.resolve_end(magnitudes, end_evaluation, evaluation);
+        if end_resolve.is_some() {
+            return end_resolve;
+        }
 
-                match magnitude_selection {
-                    States::Start => self.selection = Some(States::Start),
-                    States::End => self.selection = Some(States::End),
-                    States::Next => {
-                        let result = Some(current_selection.clone());
-                        self.selection = Some(States::Next);
-                        return result;
+        if evaluation {
+            self.set_expectation();
+
+            if self.expectation == States::Next {
+                if let Some(selection) = &self.selection {
+                    if *selection == States::Bit {
+                        let bit: u8 = magnitudes.get_bit();
+                        return Some(ReceiverOutput::Bit(bit));
                     }
-                    States::On => self.selection = Some(States::On),
-                    States::Off => self.selection = Some(States::Off),
                 }
             }
-        } else {
-            if start_magnitude >= MAGNITUDE_THRESHOLD {
-                self.selection = Some(States::Start);
-            }
+        } else if !evaluation && !end_evaluation {
+            return Some(ReceiverOutput::Error);
         }
         None
     }
@@ -220,7 +259,7 @@ fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<u
     let mut some_index: Option<usize> = None;
     let mut some_magnitude: Option<f32> = None;
     let mut tries: usize = 0;
-    let max_tries: usize = 4;
+    let max_tries: usize = 50;
     let sample_size: usize = fft_magnitude.get_sample_size();
 
     for i in 0..(samples.len() - sample_size) {
@@ -228,7 +267,7 @@ fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<u
         let magnitude: f32 = fft_magnitude.calculate(window, TRANSMIT_START_FREQUENCY);
         if let Some(index_magnitude) = some_magnitude {
             if magnitude >= index_magnitude {
-                // tries = 0;
+                tries = 0;
                 some_index = Some(i);
                 some_magnitude = Some(magnitude);
             } else {
@@ -272,6 +311,7 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
     println!("Samples: {}", samples.len());
 
     let start_index: Option<usize> = get_starting_index(&samples, &fft_magnitude);
+
     // let start_index = Some(0);
 
     if let Some(index) = start_index {
@@ -280,46 +320,53 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
         let mut receiver_states: ReceiverStates = ReceiverStates::new();
         let mut bits: Vec<u8> = Vec::new();
 
+        let mut last_state: Option<ReceiverOutput> = None;
         while sample_index + tone_size <= samples.len() {
             let samples: &[f32] = &samples[sample_index..(sample_index + tone_size)];
 
             let start_magnitude: f32 = fft_magnitude.calculate(samples, TRANSMIT_START_FREQUENCY);
             let end_magnitude: f32 = fft_magnitude.calculate(samples, TRANSMIT_END_FREQUENCY);
+            let next_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_NEXT);
             let on_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_ON);
             let off_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_OFF);
-            let next_magnitude: f32 = fft_magnitude.calculate(samples, BIT_FREQUENCY_NEXT);
+
+            let magnitudes: ReceiverMagnitudes = ReceiverMagnitudes::new(
+                start_magnitude,
+                end_magnitude,
+                next_magnitude,
+                on_magnitude,
+                off_magnitude,
+            );
 
             sample_index += tone_size + gap_size;
 
-            let result: Option<States> = receiver_states.handle_magnitudes(
-                start_magnitude,
-                end_magnitude,
-                on_magnitude,
-                off_magnitude,
-                next_magnitude,
-            );
+            let result: Option<ReceiverOutput> = receiver_states.handle_magnitudes(&magnitudes);
 
             // println!("Result: {:?}", result);
 
-            print_magnitude(
-                start_magnitude,
-                end_magnitude,
-                on_magnitude,
-                off_magnitude,
-                next_magnitude,
-            );
+            // print_magnitude(
+            //     start_magnitude,
+            //     end_magnitude,
+            //     on_magnitude,
+            //     off_magnitude,
+            //     next_magnitude,
+            // );
+            last_state = result.clone();
 
             if let Some(states) = result {
                 match states {
-                    States::Start => {}
-                    States::End => break,
-                    States::Next => {}
-                    States::On => bits.push(1),
-                    States::Off => bits.push(0),
+                    ReceiverOutput::Bit(bit) => bits.push(bit),
+                    ReceiverOutput::End => break,
+                    ReceiverOutput::Error => break,
                 }
             }
         }
-        return Some(bits);
+
+        if let Some(last_state) = last_state {
+            if last_state == ReceiverOutput::End {
+                return Some(bits);
+            }
+        }
     }
     None
 }
