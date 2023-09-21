@@ -12,6 +12,7 @@ use crate::{
 };
 
 fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
+    // println!("Samples: {:?}", samples);
     let mut q1: f32 = 0.0;
     let mut q2: f32 = 0.0;
 
@@ -28,7 +29,7 @@ fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
     }
 
     let magnitude: f32 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
-    magnitude / (SAMPLE_MAGNITUDE * samples.len() as f32)
+    magnitude / sample_count
 }
 
 fn print_magnitude(
@@ -172,26 +173,54 @@ fn get_minimum_chunk_size(target_frequency: u32, num_cycles: u32) -> usize {
     (chunk_time * AUDIO_SAMPLE_RATE as f32).ceil() as usize
 }
 
+fn normalize_samples(samples: &[i32]) -> Vec<f32> {
+    let samples: Vec<f32> = samples
+        .iter()
+        .map(|&sample| sample as f32 / SAMPLE_MAGNITUDE as f32)
+        .collect();
+    samples
+}
+
+fn get_starting_index(samples: &[f32], chunk_size: usize) -> Option<usize> {
+    let mut some_index: Option<usize> = None;
+    let mut some_magnitude: Option<f32> = None;
+    let mut tries: usize = 0;
+    let max_tries: usize = 4;
+
+    for i in 0..(samples.len() - chunk_size) {
+        let window: &[f32] = &samples[i..(i + chunk_size)];
+        let magnitude: f32 = tone_magnitude(window, TRANSMISSION_START_FREQUENCY);
+        if let Some(index_magnitude) = some_magnitude {
+            if magnitude >= index_magnitude {
+                tries = 0;
+                some_index = Some(i);
+                some_magnitude = Some(magnitude);
+            } else {
+                if tries == max_tries {
+                    break;
+                }
+                tries += 1;
+            }
+        } else {
+            if magnitude >= MAGNITUDE_THRESHOLD {
+                some_index = Some(i);
+                some_magnitude = Some(magnitude);
+            }
+        }
+    }
+    some_index
+}
+
 pub fn receiver(filename: &str) -> Option<Vec<u8>> {
-    let chunk_size: usize = ((AUDIO_SAMPLE_RATE * TONE_LENGTH_US) as usize / 1_000_000) / 2;
+    let chunk_size: usize = ((AUDIO_SAMPLE_RATE * TONE_LENGTH_US) as usize / 1_000_000);
     println!("Chunk Size: {}", chunk_size);
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-    let samples: Vec<f32> = samples.iter().map(|&x| x as f32).collect();
+    let samples: Vec<f32> = normalize_samples(&samples);
     println!("Samples: {}", samples.len());
 
-    let mut start_index: Option<usize> = None;
-
-    let st_chunk_size = get_minimum_chunk_size(10_000, 4);
-    for i in 0..(samples.len() - st_chunk_size) {
-        let window: &[f32] = &samples[i..(i + st_chunk_size)];
-        let magnitude: f32 = tone_magnitude(window, TRANSMISSION_START_FREQUENCY);
-        if magnitude >= MAGNITUDE_THRESHOLD {
-            start_index = Some(i);
-            break;
-        }
-    }
+    let start_index: Option<usize> = get_starting_index(&samples, chunk_size);
 
     if let Some(index) = start_index {
         println!("Found start at sample index: {}", index);
