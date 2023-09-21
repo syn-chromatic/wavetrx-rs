@@ -1,5 +1,4 @@
-use std::f64;
-use std::f64::consts;
+use std::f32::consts;
 use std::fs::File;
 use std::io::BufReader;
 
@@ -12,32 +11,32 @@ use crate::{
     TRANSMISSION_START_FREQUENCY,
 };
 
-fn calculate_tone_magnitude(samples: &[i32], target_frequency: u32) -> f64 {
-    let mut q1: f64 = 0.0;
-    let mut q2: f64 = 0.0;
+fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
+    let mut q1: f32 = 0.0;
+    let mut q2: f32 = 0.0;
 
-    let sample_count: f64 = samples.len() as f64;
-    let k: u32 = (0.5 + (sample_count * target_frequency as f64) / AUDIO_SAMPLE_RATE as f64) as u32;
-    let w: f64 = 2.0 * consts::PI * k as f64 / sample_count;
-    let cosine: f64 = f64::cos(w);
-    let coeff: f64 = 2.0 * cosine;
+    let sample_count: f32 = samples.len() as f32;
+    let k: u32 = (0.5 + (sample_count * target_frequency as f32) / AUDIO_SAMPLE_RATE as f32) as u32;
+    let w: f32 = 2.0 * consts::PI * k as f32 / sample_count;
+    let cosine: f32 = f32::cos(w);
+    let coeff: f32 = 2.0 * cosine;
 
     for &sample in samples.iter() {
-        let q0: f64 = coeff * q1 - q2 + sample as f64;
+        let q0: f32 = coeff * q1 - q2 + sample as f32;
         q2 = q1;
         q1 = q0;
     }
 
-    let magnitude: f64 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
-    magnitude / (SAMPLE_MAGNITUDE * samples.len() as f64)
+    let magnitude: f32 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
+    magnitude / (SAMPLE_MAGNITUDE * samples.len() as f32)
 }
 
 fn print_magnitude(
-    start_magnitude: f64,
-    end_magnitude: f64,
-    on_magnitude: f64,
-    off_magnitude: f64,
-    next_magnitude: f64,
+    start_magnitude: f32,
+    end_magnitude: f32,
+    on_magnitude: f32,
+    off_magnitude: f32,
+    next_magnitude: f32,
 ) {
     if start_magnitude >= MAGNITUDE_THRESHOLD {
         println!("Start: {}", start_magnitude);
@@ -80,11 +79,11 @@ impl ReceiverStates {
     fn is_same_selection(
         &self,
         selection: &States,
-        start_magnitude: f64,
-        end_magnitude: f64,
-        on_magnitude: f64,
-        off_magnitude: f64,
-        next_magnitude: f64,
+        start_magnitude: f32,
+        end_magnitude: f32,
+        on_magnitude: f32,
+        off_magnitude: f32,
+        next_magnitude: f32,
     ) -> bool {
         match selection {
             States::Start => start_magnitude >= MAGNITUDE_THRESHOLD,
@@ -97,11 +96,11 @@ impl ReceiverStates {
 
     fn get_magnitude_selection(
         &self,
-        start_magnitude: f64,
-        end_magnitude: f64,
-        on_magnitude: f64,
-        off_magnitude: f64,
-        next_magnitude: f64,
+        start_magnitude: f32,
+        end_magnitude: f32,
+        on_magnitude: f32,
+        off_magnitude: f32,
+        next_magnitude: f32,
     ) -> Option<States> {
         if start_magnitude >= MAGNITUDE_THRESHOLD {
             return Some(States::Start);
@@ -119,11 +118,11 @@ impl ReceiverStates {
 
     fn handle_magnitudes(
         &mut self,
-        start_magnitude: f64,
-        end_magnitude: f64,
-        on_magnitude: f64,
-        off_magnitude: f64,
-        next_magnitude: f64,
+        start_magnitude: f32,
+        end_magnitude: f32,
+        on_magnitude: f32,
+        off_magnitude: f32,
+        next_magnitude: f32,
     ) -> Option<States> {
         if let Some(current_selection) = &self.selection {
             let magnitude_selection: Option<States> = self.get_magnitude_selection(
@@ -167,57 +166,81 @@ impl ReceiverStates {
     }
 }
 
-pub fn receiver(filename: &str) -> Vec<u8> {
-    let chunk_size: usize = (AUDIO_SAMPLE_RATE as usize) / (TONE_LENGTH_US as usize * 4);
+fn get_minimum_chunk_size(target_frequency: u32, num_cycles: u32) -> usize {
+    let time_for_one_cycle = 1.0 / target_frequency as f32;
+    let chunk_time = num_cycles as f32 * time_for_one_cycle;
+    (chunk_time * AUDIO_SAMPLE_RATE as f32).ceil() as usize
+}
+
+pub fn receiver(filename: &str) -> Option<Vec<u8>> {
+    let chunk_size: usize = ((AUDIO_SAMPLE_RATE * TONE_LENGTH_US) as usize / 1_000_000) / 2;
     println!("Chunk Size: {}", chunk_size);
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    let samples: Vec<f32> = samples.iter().map(|&x| x as f32).collect();
+    println!("Samples: {}", samples.len());
 
-    let mut sample_index: usize = 0;
-    let mut receiver_states: ReceiverStates = ReceiverStates::new();
-    let mut bits: Vec<u8> = Vec::new();
+    let mut start_index: Option<usize> = None;
 
-    while sample_index + chunk_size <= samples.len() {
-        let samples: &[i32] = &samples[sample_index..(sample_index + chunk_size)];
-
-        let start_magnitude: f64 = calculate_tone_magnitude(samples, TRANSMISSION_START_FREQUENCY);
-        let end_magnitude: f64 = calculate_tone_magnitude(samples, TRANSMISSION_END_FREQUENCY);
-        let on_magnitude: f64 = calculate_tone_magnitude(samples, BIT_TONE_FREQUENCY_ON);
-        let off_magnitude: f64 = calculate_tone_magnitude(samples, BIT_TONE_FREQUENCY_OFF);
-        let next_magnitude: f64 = calculate_tone_magnitude(samples, BIT_TONE_FREQUENCY_NEXT);
-
-        sample_index += chunk_size;
-
-        let result = receiver_states.handle_magnitudes(
-            start_magnitude,
-            end_magnitude,
-            on_magnitude,
-            off_magnitude,
-            next_magnitude,
-        );
-
-        // println!("Result: {:?}", result);
-
-        // print_magnitude(
-        //     start_magnitude,
-        //     end_magnitude,
-        //     on_magnitude,
-        //     off_magnitude,
-        //     next_magnitude,
-        // );
-
-        if let Some(states) = result {
-            match states {
-                States::Start => {}
-                States::End => {}
-                States::Next => {}
-                States::On => bits.push(1),
-                States::Off => bits.push(0),
-            }
+    let st_chunk_size = get_minimum_chunk_size(10_000, 4);
+    for i in 0..(samples.len() - st_chunk_size) {
+        let window: &[f32] = &samples[i..(i + st_chunk_size)];
+        let magnitude: f32 = tone_magnitude(window, TRANSMISSION_START_FREQUENCY);
+        if magnitude >= MAGNITUDE_THRESHOLD {
+            start_index = Some(i);
+            break;
         }
     }
-    bits
+
+    if let Some(index) = start_index {
+        println!("Found start at sample index: {}", index);
+        let mut sample_index: usize = index;
+        let mut receiver_states: ReceiverStates = ReceiverStates::new();
+        let mut bits: Vec<u8> = Vec::new();
+
+        while sample_index + chunk_size <= samples.len() {
+            let samples: &[f32] = &samples[sample_index..(sample_index + chunk_size)];
+
+            let start_magnitude: f32 = tone_magnitude(samples, TRANSMISSION_START_FREQUENCY);
+            let end_magnitude: f32 = tone_magnitude(&samples, TRANSMISSION_END_FREQUENCY);
+            let on_magnitude: f32 = tone_magnitude(samples, BIT_TONE_FREQUENCY_ON);
+            let off_magnitude: f32 = tone_magnitude(samples, BIT_TONE_FREQUENCY_OFF);
+            let next_magnitude: f32 = tone_magnitude(samples, BIT_TONE_FREQUENCY_NEXT);
+
+            sample_index += chunk_size;
+
+            let result: Option<States> = receiver_states.handle_magnitudes(
+                start_magnitude,
+                end_magnitude,
+                on_magnitude,
+                off_magnitude,
+                next_magnitude,
+            );
+
+            // // println!("Result: {:?}", result);
+
+            print_magnitude(
+                start_magnitude,
+                end_magnitude,
+                on_magnitude,
+                off_magnitude,
+                next_magnitude,
+            );
+
+            if let Some(states) = result {
+                match states {
+                    States::Start => {}
+                    States::End => {}
+                    States::Next => {}
+                    States::On => bits.push(1),
+                    States::Off => bits.push(0),
+                }
+            }
+        }
+        return Some(bits);
+    }
+    None
 }
 
 fn bits_to_bytes(bits: &Vec<u8>) -> Vec<u8> {

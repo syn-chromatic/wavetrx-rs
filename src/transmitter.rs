@@ -1,4 +1,4 @@
-use std::f64::consts;
+use std::f32::consts;
 use std::fs::File;
 use std::io::BufWriter;
 
@@ -30,11 +30,11 @@ impl WaveFile {
 
     fn add_tone(&mut self, frequency: u32, duration: u32) -> Result<(), hound::Error> {
         let num_samples: u32 = (AUDIO_SAMPLE_RATE * duration) / 1_000_000;
-        let period: f64 = AUDIO_SAMPLE_RATE as f64 / frequency as f64;
+        let period: f32 = AUDIO_SAMPLE_RATE as f32 / frequency as f32;
 
         for i in 0..num_samples {
             let sample: i32 =
-                (SAMPLE_MAGNITUDE * (2.0 * consts::PI * i as f64 / period).sin()) as i32;
+                (SAMPLE_MAGNITUDE * (2.0 * consts::PI * i as f32 / period).sin()) as i32;
             self.writer.write_sample(sample)?;
         }
 
