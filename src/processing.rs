@@ -7,7 +7,13 @@ use rustfft::FftPlanner;
 
 use hound::{WavReader, WavSpec};
 
+use crate::receiver::normalize_samples;
+use crate::receiver::FFTMagnitude;
 use crate::utils::save_audio;
+use crate::{
+    BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, TONE_LENGTH_US,
+    TRANSMIT_END_FREQUENCY, TRANSMIT_START_FREQUENCY,
+};
 
 fn print_samples(samples: &[f32]) {
     let mut trunc_samples: Vec<f32> = samples.to_vec();
@@ -50,56 +56,30 @@ fn maximize_bin(
     sample_size: usize,
     max_magnitude: f32,
 ) {
-    if bin > 0 && bin != sample_size {
-        // complex_samples[bin].re = 1000.0;
-        // complex_samples[sample_size - bin].re = 1000.0;
-        let complex_bin: Complex<f32> = complex_samples[bin];
-        let complex_mirror: Complex<f32> = complex_samples[sample_size - bin];
-        let bin_inverse: f32 = complex_bin.inv().norm();
-        let mirror_inverse: f32 = complex_mirror.inv().norm();
+    // if bin > 0 && bin != sample_size {
+    let complex_bin: Complex<f32> = complex_samples[bin];
+    let complex_mirror: Complex<f32> = complex_samples[sample_size - bin];
 
-        if bin_inverse >= 0.0
-            && bin_inverse <= 0.1
-            && mirror_inverse >= 0.0
-            && mirror_inverse <= 0.1
-        {
-            let complex_norm: f32 = 1.0 - bin_inverse;
-            let inverse_norm: f32 = 1.0 - mirror_inverse;
+    let normalization_factor: f32 = 2.0 / sample_size as f32;
+    let bin_scale: f32 = complex_bin.norm() / normalization_factor;
+    let mirror_scale: f32 = complex_mirror.norm() / normalization_factor;
 
-            let bin_scale: f32 = 95.0 / (complex_bin.norm() / max_magnitude);
-            let mirror_scale: f32 = 95.0 / (complex_mirror.norm() / max_magnitude);
+    let bin_scale = bin_scale * 0.8;
+    let mirror_scale = mirror_scale * 0.8;
 
-            complex_samples[bin] = complex_bin.scale(bin_scale);
-            complex_samples[sample_size - bin] = complex_mirror.scale(mirror_scale);
+    complex_samples[bin] = complex_bin.scale(max_magnitude - bin_scale);
+    let max_magnitude = max_magnitude * 2.0;
+    complex_samples[sample_size - bin] = complex_mirror.scale(max_magnitude - mirror_scale);
 
-            println!(
-                "Complex Bin: {} | Inverse Bin: {} | Value: {} | BScale: {} | MScale: {}",
-                complex_norm,
-                inverse_norm,
-                complex_bin.norm(),
-                bin_scale,
-                mirror_scale,
-            );
-        } else {
-            let bin_scale = 95.0 / (complex_bin.norm() / max_magnitude);
-            let mirror_scale = 95.0 / (complex_mirror.norm() / max_magnitude);
+    println!(
+        "Bin Norm: {} | Bin Sq: {} | Bin Sq2: {} | Scale: {}",
+        complex_bin.norm(),
+        complex_bin.norm_sqr(),
+        complex_bin.norm_sqr().sqrt(),
+        bin_scale
+    );
 
-            // complex_samples[bin] = complex_bin.scale(0.0);
-            // complex_samples[sample_size - bin] = complex_mirror.scale(0.0);
-
-            println!(
-                "Complex Bin: {} | Inverse Bin: {} | Value: {} | BScale: {} | MScale: {}",
-                0.0,
-                0.0,
-                complex_bin.norm(),
-                bin_scale,
-                mirror_scale,
-            );
-        }
-
-        // complex_samples[bin] = complex_samples[bin].scale(1000.0);
-        // complex_samples[sample_size - bin] = complex_samples[sample_size - bin].scale(1000.0);
-    }
+    // }
 }
 
 fn get_bin(target_frequency: f32, sample_size: usize, sample_rate: usize) -> usize {
@@ -109,7 +89,7 @@ fn get_bin(target_frequency: f32, sample_size: usize, sample_rate: usize) -> usi
 
 #[test]
 fn test_func() {
-    let filename = "test4.wav";
+    let filename = "test5.wav";
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let spec: WavSpec = reader.spec();
@@ -118,34 +98,15 @@ fn test_func() {
     let sample_rate = spec.sample_rate as usize;
     println!("Max Magnitude: {}", max_magnitude);
 
+    let sample_size: usize = (spec.sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
+    println!("Sample Size: {}", sample_size);
+
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let mut samples: Vec<f32> = samples.iter().map(|&sample| sample as f32 - 1.0).collect();
     println!("Samples: {}", samples.len());
-
-    // for sample in samples.iter() {
-    //     if *sample >= max_magnitude || *sample <= -max_magnitude {
-    //         println!("VALUE: {}", sample);
-    //     }
-    // }
-    // return;
+    let fft_magnitude = FFTMagnitude::new(sample_size, spec);
 
     print_samples(&samples);
-
-    // let mut complex_samples: Vec<Complex<f32>> = samples
-    //     .iter()
-    //     .map(|&sample| Complex::from(sample as f32))
-    //     .collect();
-
-    let sample_size: usize = (192_000 * 1000) as usize / 1_000_000;
-    // let gap_size: usize = (192_000 * 500) as usize / 1_000_000;
-    println!("Sample Size: {}", sample_size);
-
-    let target_frequency1: f32 = 10_000.0;
-    let target_frequency2: f32 = 12_000.0;
-    let target_frequency3: f32 = 14_000.0;
-
-    let target_frequency4: f32 = 15_000.0;
-    let target_frequency5: f32 = 16_000.0;
 
     let mut planner: FftPlanner<f32> = FftPlanner::new();
     let fft_forward = planner.plan_fft_forward(sample_size);
@@ -154,22 +115,27 @@ fn test_func() {
 
     for i in (0..samples.len() - sample_size + 1).step_by(sample_size) {
         let samples_chunk: &[f32] = &samples[i..i + sample_size];
-        let mut complex_samples: Vec<Complex<f32>> = to_complex_samples(samples_chunk);
+        let samples_chunk: Vec<f32> = samples_chunk.iter().map(|s| s / max_magnitude).collect();
+        let mut complex_samples: Vec<Complex<f32>> = to_complex_samples(&samples_chunk);
 
-        fft_forward.process_with_scratch(&mut complex_samples, &mut scratch);
+        fft_forward.process(&mut complex_samples);
 
-        let bin1: usize = get_bin(target_frequency1, sample_size, sample_rate);
-        let bin2: usize = get_bin(target_frequency2, sample_size, sample_rate);
-        let bin3: usize = get_bin(target_frequency3, sample_size, sample_rate);
-        let bin4: usize = get_bin(target_frequency4, sample_size, sample_rate);
-        let bin5: usize = get_bin(target_frequency5, sample_size, sample_rate);
+        let frequencies: Vec<u32> = vec![
+            BIT_FREQUENCY_ON,
+            BIT_FREQUENCY_OFF,
+            BIT_FREQUENCY_NEXT,
+            TRANSMIT_START_FREQUENCY,
+            TRANSMIT_END_FREQUENCY,
+        ];
 
-        let bins: Vec<usize> = vec![bin1, bin2, bin3, bin4, bin5];
-
-        for bin in bins.iter() {
-            maximize_bin(&mut complex_samples, *bin, sample_size, max_magnitude);
+        for frequency in frequencies.iter() {
+            let magnitude = fft_magnitude.calculate(&samples_chunk, *frequency);
+            if magnitude >= 0.2 {
+                let bin = fft_magnitude.get_bin(*frequency);
+                maximize_bin(&mut complex_samples, bin, sample_size, max_magnitude);
+            }
         }
-        println!("\n\n");
+        // println!("\n\n");
 
         // for bin in 0..sample_size - 1 {
         //     if !bins.contains(&bin) {
@@ -181,14 +147,14 @@ fn test_func() {
 
         for (j, complex) in complex_samples.iter().enumerate() {
             let value: f32 = if complex.re != 0.0 {
-                complex.re / (sample_size as f32 + 1.0)
+                complex.re * (2.0 / sample_size as f32)
             } else {
                 0.0
             };
 
-            let value = if value > max_magnitude {
+            let value = if value.is_sign_positive() && value > max_magnitude {
                 max_magnitude
-            } else if value < -max_magnitude {
+            } else if value.is_sign_negative() && value < -max_magnitude {
                 -max_magnitude
             } else {
                 value

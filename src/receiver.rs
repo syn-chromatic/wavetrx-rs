@@ -36,17 +36,19 @@ fn tone_magnitude(samples: &[f32], target_frequency: u32) -> f32 {
     }
 
     let magnitude: f32 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
-    magnitude / sample_count
+    let normalization_factor: f32 = 2.0 / sample_count;
+    let normalized_magnitude: f32 = magnitude * normalization_factor;
+    normalized_magnitude
 }
 
-struct FFTMagnitude {
+pub struct FFTMagnitude {
     fft: Arc<dyn Fft<f32>>,
     sample_rate: usize,
     sample_size: usize,
 }
 
 impl FFTMagnitude {
-    fn new(sample_size: usize, spec: WavSpec) -> Self {
+    pub fn new(sample_size: usize, spec: WavSpec) -> Self {
         let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
         let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(sample_size);
         let sample_rate: usize = spec.sample_rate as usize;
@@ -57,7 +59,7 @@ impl FFTMagnitude {
         }
     }
 
-    fn get_bin(&self, target_frequency: u32) -> usize {
+    pub fn get_bin(&self, target_frequency: u32) -> usize {
         let target_frequency: f32 = target_frequency as f32;
         let sample_size: f32 = self.sample_size as f32;
         let sample_rate: f32 = self.sample_rate as f32;
@@ -65,7 +67,7 @@ impl FFTMagnitude {
         bin
     }
 
-    fn calculate(&self, samples: &[f32], target_frequency: u32) -> f32 {
+    pub fn calculate(&self, samples: &[f32], target_frequency: u32) -> f32 {
         let mut buffer: Vec<Complex<f32>> = samples.iter().map(|&s| Complex::new(s, 0.0)).collect();
         self.fft.process(&mut buffer);
 
@@ -75,7 +77,7 @@ impl FFTMagnitude {
         magnitude
     }
 
-    fn get_sample_size(&self) -> usize {
+    pub fn get_sample_size(&self) -> usize {
         self.sample_size
     }
 }
@@ -272,7 +274,7 @@ fn get_max_magnitudes(samples: &[f32]) -> (f32, f32) {
     (*positive_magnitude, *negative_magnitude)
 }
 
-fn normalize_samples(samples: &[f32]) -> Vec<f32> {
+pub fn normalize_samples(samples: &[f32]) -> Vec<f32> {
     let mut normalized_samples: Vec<f32> = Vec::new();
     let (positive, negative): (f32, f32) = get_max_magnitudes(samples);
 
@@ -323,7 +325,7 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let spec: WavSpec = reader.spec();
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-    let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
+    let mut samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
 
     let tone_size: usize = (spec.sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
     let gap_size: usize = (spec.sample_rate * TONE_GAP_US) as usize / 1_000_000;
@@ -333,7 +335,7 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
 
     let fft_magnitude: FFTMagnitude = FFTMagnitude::new(tone_size, spec);
 
-    // let highpass_frequency: f32 = 8_000.0;
+    let highpass_frequency: f32 = 18_000.0;
     // let lowpass_frequency: f32 = 18_000.0;
 
     // apply_highpass_filter(&mut samples, highpass_frequency, spec);

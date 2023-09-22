@@ -13,6 +13,9 @@ pub fn apply_highpass_filter(samples: &mut Vec<f32>, highpass_frequency: f32, sp
     let filter: Type = Type::HighPass;
     let q_value: f32 = 0.707;
 
+    let audio_bps: u16 = spec.bits_per_sample;
+    let max_magnitude: f32 = ((2i32.pow(audio_bps as u32 - 1)) - 1) as f32;
+
     let coefficients: Result<Coefficients<f32>, biquad::Errors> =
         Coefficients::<f32>::from_params(filter, fs, f0, q_value);
 
@@ -21,6 +24,11 @@ pub fn apply_highpass_filter(samples: &mut Vec<f32>, highpass_frequency: f32, sp
 
         for sample in samples.iter_mut() {
             *sample = filter.run(*sample);
+            if sample.is_sign_positive() && *sample > max_magnitude {
+                *sample = max_magnitude;
+            } else if sample.is_sign_negative() && *sample < -max_magnitude {
+                *sample = -max_magnitude;
+            }
         }
     }
 }

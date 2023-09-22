@@ -9,15 +9,24 @@ use crate::transmitter::generate_audio_data;
 
 pub const AUDIO_BPS: u16 = 16;
 pub const AUDIO_SR: u32 = 48_000;
-pub const TONE_LENGTH_US: u32 = 1000;
-pub const TONE_GAP_US: u32 = 1000;
+pub const TONE_LENGTH_US: u32 = 10_000;
+pub const TONE_GAP_US: u32 = 10_000;
 
-pub const BIT_FREQUENCY_ON: u32 = 10_000;
-pub const BIT_FREQUENCY_OFF: u32 = 12_000;
-pub const BIT_FREQUENCY_NEXT: u32 = 14_000;
+// pub const FREQ_SEP = AUDIO_SR /
 
-pub const TRANSMIT_START_FREQUENCY: u32 = 15_000;
-pub const TRANSMIT_END_FREQUENCY: u32 = 16_000;
+// pub const BIT_FREQUENCY_ON: u32 = 10_000;
+// pub const BIT_FREQUENCY_OFF: u32 = 12_000;
+// pub const BIT_FREQUENCY_NEXT: u32 = 14_000;
+
+// pub const TRANSMIT_START_FREQUENCY: u32 = 15_000;
+// pub const TRANSMIT_END_FREQUENCY: u32 = 16_000;
+
+pub const BIT_FREQUENCY_ON: u32 = 19_000;
+pub const BIT_FREQUENCY_OFF: u32 = 19_200;
+pub const BIT_FREQUENCY_NEXT: u32 = 19_400;
+
+pub const TRANSMIT_START_FREQUENCY: u32 = 19_600;
+pub const TRANSMIT_END_FREQUENCY: u32 = 19_800;
 
 pub const SAMPLING_MAGNITUDE: f32 = ((2i32.pow(AUDIO_BPS as u32 - 1)) - 1) as f32;
 pub const MAGNITUDE_THRESHOLD: f32 = 0.1;
@@ -42,7 +51,8 @@ fn test_transmitter() {
 #[test]
 fn test_receiver() {
     // let filename: &str = "transmitted_audio.wav";
-    let filename = "test3.wav";
+    let filename: &str = "test5.wav";
+    // let filename: &str = "maximized_audio.wav";
     let bits: Option<Vec<u8>> = receiver(filename);
     if let Some(bits) = bits {
         println!("{}", "-".repeat(20));

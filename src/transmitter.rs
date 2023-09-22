@@ -28,13 +28,39 @@ impl WaveFile {
         Ok(WaveFile { writer })
     }
 
+    // fn add_tone(&mut self, frequency: u32, duration: u32) -> Result<(), hound::Error> {
+    //     let num_samples: u32 = (AUDIO_SR * duration) / 1_000_000;
+    //     let period: f32 = AUDIO_SR as f32 / frequency as f32;
+
+    //     for i in 0..num_samples {
+    //         let sample: i32 =
+    //             (SAMPLING_MAGNITUDE * (2.0 * consts::PI * i as f32 / period).sin()) as i32;
+    //         self.writer.write_sample(sample)?;
+    //     }
+
+    //     Ok(())
+    // }
+
     fn add_tone(&mut self, frequency: u32, duration: u32) -> Result<(), hound::Error> {
-        let num_samples: u32 = (AUDIO_SR * duration) / 1_000_000;
-        let period: f32 = AUDIO_SR as f32 / frequency as f32;
+        let num_samples = ((AUDIO_SR * duration) / 1_000_000) as usize;
+        let period = AUDIO_SR as f32 / frequency as f32;
+
+        let fade_duration = (num_samples as f32 * 0.1) as usize; // 10% of the tone duration
 
         for i in 0..num_samples {
-            let sample: i32 =
-                (SAMPLING_MAGNITUDE * (2.0 * consts::PI * i as f32 / period).sin()) as i32;
+            let sample_value: f32 =
+                SAMPLING_MAGNITUDE * (2.0 * consts::PI * i as f32 / period).sin();
+
+            let fade_coefficient = if i < fade_duration {
+                0.5 * (1.0 - (consts::PI * i as f32 / fade_duration as f32).cos())
+            } else if i >= num_samples - fade_duration {
+                let relative_i = i - (num_samples - fade_duration);
+                0.5 * (1.0 + (consts::PI * relative_i as f32 / fade_duration as f32).cos())
+            } else {
+                1.0
+            };
+
+            let sample = (sample_value * fade_coefficient) as i32;
             self.writer.write_sample(sample)?;
         }
 
