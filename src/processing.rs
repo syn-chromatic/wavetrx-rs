@@ -93,12 +93,12 @@ fn test_func() {
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let spec: WavSpec = reader.spec();
-    let audio_bps: u16 = spec.bits_per_sample;
+    let audio_bps: usize = spec.bits_per_sample as usize;
     let max_magnitude: f32 = ((2i32.pow(audio_bps as u32 - 1)) - 1) as f32;
     let sample_rate = spec.sample_rate as usize;
     println!("Max Magnitude: {}", max_magnitude);
 
-    let sample_size: usize = (spec.sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
+    let sample_size: usize = (sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
     println!("Sample Size: {}", sample_size);
 
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
@@ -120,7 +120,7 @@ fn test_func() {
 
         fft_forward.process(&mut complex_samples);
 
-        let frequencies: Vec<u32> = vec![
+        let frequencies: Vec<usize> = vec![
             BIT_FREQUENCY_ON,
             BIT_FREQUENCY_OFF,
             BIT_FREQUENCY_NEXT,

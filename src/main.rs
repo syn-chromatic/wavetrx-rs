@@ -7,12 +7,13 @@ mod utils;
 use crate::receiver::{bits_to_string, receiver};
 use crate::transmitter::generate_audio_data;
 
-pub const AUDIO_BPS: u16 = 16;
-pub const AUDIO_SR: u32 = 48_000;
-pub const TONE_LENGTH_US: u32 = 10_000;
-pub const TONE_GAP_US: u32 = 10_000;
+pub const AUDIO_BPS: usize = 32;
+pub const AUDIO_SR: usize = 48_000;
+pub const TONE_LENGTH_US: usize = 10_000;
+pub const TONE_GAP_US: usize = 10_000;
 
-// pub const FREQ_SEP = AUDIO_SR /
+pub const SAMPLE_SIZE: f32 = (AUDIO_SR as f32 * TONE_LENGTH_US as f32) / 1_000_000.0;
+pub const MIN_FREQ_SEP: f32 = AUDIO_SR as f32 / SAMPLE_SIZE;
 
 // pub const BIT_FREQUENCY_ON: u32 = 10_000;
 // pub const BIT_FREQUENCY_OFF: u32 = 12_000;
@@ -21,20 +22,24 @@ pub const TONE_GAP_US: u32 = 10_000;
 // pub const TRANSMIT_START_FREQUENCY: u32 = 15_000;
 // pub const TRANSMIT_END_FREQUENCY: u32 = 16_000;
 
-pub const BIT_FREQUENCY_ON: u32 = 19_000;
-pub const BIT_FREQUENCY_OFF: u32 = 19_200;
-pub const BIT_FREQUENCY_NEXT: u32 = 19_400;
+pub const LP_FILTER: f32 = 18_000.0;
+pub const HP_FILTER: f32 = 16_000.0;
 
-pub const TRANSMIT_START_FREQUENCY: u32 = 19_600;
-pub const TRANSMIT_END_FREQUENCY: u32 = 19_800;
+pub const BIT_FREQUENCY_ON: usize = 17_000;
+pub const BIT_FREQUENCY_OFF: usize = 17_100;
+pub const BIT_FREQUENCY_NEXT: usize = 17_200;
 
-pub const SAMPLING_MAGNITUDE: f32 = ((2i32.pow(AUDIO_BPS as u32 - 1)) - 1) as f32;
-pub const MAGNITUDE_THRESHOLD: f32 = 0.1;
+pub const TRANSMIT_START_FREQUENCY: usize = 17_300;
+pub const TRANSMIT_END_FREQUENCY: usize = 17_400;
+
+pub const SAMPLING_MAGNITUDE: f32 = ((2usize.pow(AUDIO_BPS as u32 - 1)) - 1) as f32;
+pub const DB_THRESHOLD: f32 = 15.0;
 
 fn main() {}
 
 #[test]
 fn test_transmitter() {
+    println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
     let string: &str = "Test String";
     let data: &[u8] = string.as_bytes();
@@ -50,8 +55,9 @@ fn test_transmitter() {
 
 #[test]
 fn test_receiver() {
-    // let filename: &str = "transmitted_audio.wav";
-    let filename: &str = "test5.wav";
+    println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
+    let filename: &str = "transmitted_audio.wav";
+    // let filename: &str = "test6.wav";
     // let filename: &str = "maximized_audio.wav";
     let bits: Option<Vec<u8>> = receiver(filename);
     if let Some(bits) = bits {
