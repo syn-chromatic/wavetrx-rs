@@ -296,11 +296,6 @@ pub fn normalize_samples(samples: &[f32], bitrate: usize) -> Vec<f32> {
     let (mut positive, mut negative): (f32, f32) = get_max_magnitudes(samples);
     let max_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
 
-    println!(
-        "Positive: {} | Negative: {} | Max: {}",
-        positive, negative, max_magnitude
-    );
-
     if positive < max_magnitude * 0.1 {
         positive = f32::INFINITY;
     }
