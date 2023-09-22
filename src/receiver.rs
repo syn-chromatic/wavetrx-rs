@@ -325,8 +325,7 @@ pub fn normalize_samples(samples: &[f32], bitrate: usize) -> Vec<f32> {
     normalized_samples
 }
 
-pub fn normalize_normalized_samples(samples: &[f32]) -> Vec<f32> {
-    let mut normalized_samples: Vec<f32> = Vec::new();
+pub fn re_normalize_samples(samples: &mut [f32]) {
     let (mut positive, mut negative): (f32, f32) = get_max_magnitudes(samples);
 
     if positive < 0.1 {
@@ -336,19 +335,16 @@ pub fn normalize_normalized_samples(samples: &[f32]) -> Vec<f32> {
         negative = f32::NEG_INFINITY;
     }
 
-    for sample in samples.iter() {
-        let sample: f32 = if sample.is_sign_positive() {
-            *sample / positive
+    for sample in samples.iter_mut() {
+        if sample.is_sign_positive() {
+            *sample /= positive
         } else {
-            *sample / negative.abs()
+            *sample /= negative.abs()
         };
-
-        normalized_samples.push(sample);
     }
-    normalized_samples
 }
 
-pub fn denormalize_samples(samples: &[f32], bitrate: usize) -> Vec<i32> {
+pub fn de_normalize_samples(samples: &[f32], bitrate: usize) -> Vec<i32> {
     let mut denormalized_samples: Vec<i32> = Vec::new();
     let max_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
 
@@ -390,7 +386,7 @@ fn get_magnitudes(samples: &[f32], fft_magnitude: &FFTMagnitude) -> ReceiverMagn
     magnitudes
 }
 
-fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<usize> {
+fn get_starting_index(samples: &mut [f32], fft_magnitude: &FFTMagnitude) -> Option<usize> {
     let mut some_index: Option<usize> = None;
     let mut some_magnitude: Option<f32> = None;
     let mut tries: usize = 0;
@@ -398,8 +394,8 @@ fn get_starting_index(samples: &[f32], fft_magnitude: &FFTMagnitude) -> Option<u
     let sample_size: usize = fft_magnitude.get_sample_size();
 
     for i in 0..(samples.len() - sample_size) {
-        let samples_chunk: &[f32] = &samples[i..(i + sample_size)];
-        let samples_chunk: &Vec<f32> = &normalize_normalized_samples(samples_chunk);
+        let samples_chunk: &mut [f32] = &mut samples[i..(i + sample_size)];
+        re_normalize_samples(samples_chunk);
         let magnitude: f32 = fft_magnitude.calculate(samples_chunk, TRANSMIT_START_FREQUENCY);
         if let Some(index_magnitude) = some_magnitude {
             if magnitude >= index_magnitude && magnitude <= 0.0 {
@@ -433,9 +429,8 @@ fn apply_filters(samples: &mut Vec<f32>, spec: WavSpec) {
 
 fn save_normalized(samples: &[f32], spec: WavSpec) {
     let bitrate: usize = spec.bits_per_sample as usize;
-    let normalized_samples: Vec<f32> = normalize_samples(&samples, bitrate);
-    let denormalized_samples: Vec<i32> = denormalize_samples(&normalized_samples, bitrate);
-    save_audio("normalized.wav", &denormalized_samples, spec);
+    let de_normalized_samples: Vec<i32> = de_normalize_samples(&samples, bitrate);
+    save_audio("normalized.wav", &de_normalized_samples, spec);
 }
 
 pub fn receiver(filename: &str) -> Option<Vec<u8>> {
@@ -454,27 +449,26 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
     println!("Gap Size: {}", gap_size);
 
     apply_filters(&mut samples, spec);
-    save_normalized(&samples, spec);
-    let samples = &normalize_samples(&samples, bitrate);
+
+    let mut samples: Vec<f32> = normalize_samples(&samples, bitrate);
 
     let fft_magnitude: FFTMagnitude = FFTMagnitude::new(tone_size, spec);
-    let start_index: Option<usize> = get_starting_index(&samples, &fft_magnitude);
+    let start_index: Option<usize> = get_starting_index(&mut samples, &fft_magnitude);
 
-    if let Some(index) = start_index {
+    if let Some(mut index) = start_index {
         println!("Found start at sample index: {}", index);
-        let mut sample_index: usize = index;
         let mut receiver_states: ReceiverStates = ReceiverStates::new();
         let mut bits: Vec<u8> = Vec::new();
 
         let mut last_state: Option<ReceiverOutput> = None;
-        while sample_index + tone_size <= samples.len() {
-            let samples_chunk: &[f32] = &samples[sample_index..(sample_index + tone_size)];
-            let samples_chunk = &normalize_normalized_samples(samples_chunk);
+        while index + tone_size <= samples.len() {
+            let samples_chunk: &mut [f32] = &mut samples[index..(index + tone_size)];
+            re_normalize_samples(samples_chunk);
             let magnitudes: ReceiverMagnitudes = get_magnitudes(samples_chunk, &fft_magnitude);
             let result: Option<ReceiverOutput> = receiver_states.handle_magnitudes(&magnitudes);
 
             last_state = result.clone();
-            sample_index += tone_size + gap_size;
+            index += tone_size + gap_size;
 
             if let Some(states) = result {
                 match states {
@@ -484,7 +478,7 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
                 }
             }
         }
-
+        save_normalized(&samples, spec);
         if let Some(last_state) = last_state {
             if last_state == ReceiverOutput::End {
                 return Some(bits);
