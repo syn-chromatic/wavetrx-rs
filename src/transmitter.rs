@@ -158,6 +158,5 @@ pub fn generate_audio_data(filename: &str, data: &[u8]) -> Result<(), hound::Err
     wav.add_tone(0, TONE_GAP_US)?;
     wav.add_sine_faded_tone(BIT_FREQUENCY_NEXT, TONE_LENGTH_US, fade_ratio)?;
     wav.add_tone(0, TONE_GAP_US)?;
-    wav.add_sine_faded_tone(TRANSMIT_END_FREQUENCY, TONE_LENGTH_US, fade_ratio)?;
     Ok(())
 }
