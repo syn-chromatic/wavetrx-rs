@@ -34,11 +34,11 @@ impl WaveFile {
         })
     }
 
-    fn add_tone(&mut self, frequency: usize, duration: usize) -> Result<(), hound::Error> {
+    fn add_tone(&mut self, frequency: f32, duration: usize) -> Result<(), hound::Error> {
         let sample_rate: usize = self.spec.sample_rate as usize;
 
         let sample_size: usize = (sample_rate * duration) / 1_000_000;
-        let period: f32 = sample_rate as f32 / frequency as f32;
+        let period: f32 = sample_rate as f32 / frequency;
 
         for idx in 0..sample_size {
             let sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
@@ -50,13 +50,13 @@ impl WaveFile {
 
     fn add_sine_faded_tone(
         &mut self,
-        frequency: usize,
+        frequency: f32,
         duration: usize,
         fade_ratio: f32,
     ) -> Result<(), hound::Error> {
         let sample_rate: usize = self.spec.sample_rate as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
-        let period: f32 = sample_rate as f32 / frequency as f32;
+        let period: f32 = sample_rate as f32 / frequency;
         let fade_size: usize = (sample_size as f32 * fade_ratio) as usize;
 
         for idx in 0..sample_size {
@@ -71,13 +71,13 @@ impl WaveFile {
 
     fn add_linear_faded_tone(
         &mut self,
-        frequency: usize,
+        frequency: f32,
         duration: usize,
         fade_ratio: f32,
     ) -> Result<(), hound::Error> {
         let sample_rate: usize = self.spec.sample_rate as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
-        let period: f32 = sample_rate as f32 / frequency as f32;
+        let period: f32 = sample_rate as f32 / frequency;
         let fade_size: usize = (sample_size as f32 * fade_ratio) as usize;
 
         for idx in 0..sample_size {
@@ -124,15 +124,15 @@ impl WaveFile {
 fn transmit_byte(wav: &mut WaveFile, byte: u8, fade_ratio: f32) -> Result<(), hound::Error> {
     for i in (0..8).rev() {
         let is_bit_set: bool = (byte & (1 << i)) != 0;
-        let freq: usize = if is_bit_set {
+        let freq: f32 = if is_bit_set {
             BIT_FREQUENCY_ON
         } else {
             BIT_FREQUENCY_OFF
         };
         wav.add_sine_faded_tone(freq, TONE_LENGTH_US, fade_ratio)?;
-        wav.add_tone(0, TONE_GAP_US)?;
+        wav.add_tone(0.0, TONE_GAP_US)?;
         wav.add_sine_faded_tone(BIT_FREQUENCY_NEXT, TONE_LENGTH_US, fade_ratio)?;
-        wav.add_tone(0, TONE_GAP_US)?;
+        wav.add_tone(0.0, TONE_GAP_US)?;
     }
 
     Ok(())
@@ -142,11 +142,11 @@ pub fn generate_audio_data(filename: &str, data: &[u8]) -> Result<(), hound::Err
     let mut wav: WaveFile = WaveFile::new(filename)?;
     let fade_ratio: f32 = 0.1;
 
-    wav.add_tone(0, TONE_GAP_US)?;
+    wav.add_tone(0.0, TONE_GAP_US)?;
     wav.add_sine_faded_tone(TRANSMIT_START_FREQUENCY, TONE_LENGTH_US, fade_ratio)?;
-    wav.add_tone(0, TONE_GAP_US)?;
+    wav.add_tone(0.0, TONE_GAP_US)?;
     wav.add_sine_faded_tone(BIT_FREQUENCY_NEXT, TONE_LENGTH_US, fade_ratio)?;
-    wav.add_tone(0, TONE_GAP_US)?;
+    wav.add_tone(0.0, TONE_GAP_US)?;
 
     for &byte in data {
         let result = transmit_byte(&mut wav, byte, fade_ratio);
@@ -155,8 +155,8 @@ pub fn generate_audio_data(filename: &str, data: &[u8]) -> Result<(), hound::Err
         }
     }
     wav.add_sine_faded_tone(TRANSMIT_END_FREQUENCY, TONE_LENGTH_US, fade_ratio)?;
-    wav.add_tone(0, TONE_GAP_US)?;
+    wav.add_tone(0.0, TONE_GAP_US)?;
     wav.add_sine_faded_tone(BIT_FREQUENCY_NEXT, TONE_LENGTH_US, fade_ratio)?;
-    wav.add_tone(0, TONE_GAP_US)?;
+    wav.add_tone(0.0, TONE_GAP_US)?;
     Ok(())
 }

@@ -7,8 +7,7 @@ use rustfft::FftPlanner;
 
 use hound::{WavReader, WavSpec};
 
-use crate::receiver::normalize_samples;
-use crate::receiver::FFTMagnitude;
+use crate::rx::spectrum::FourierMagnitude;
 use crate::utils::save_audio;
 use crate::{
     BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, TONE_LENGTH_US,
@@ -104,7 +103,7 @@ fn test_func() {
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let mut samples: Vec<f32> = samples.iter().map(|&sample| sample as f32 - 1.0).collect();
     println!("Samples: {}", samples.len());
-    let fft_magnitude = FFTMagnitude::new(sample_size, spec);
+    let fft_magnitude = FourierMagnitude::new(sample_size, spec);
 
     print_samples(&samples);
 
@@ -120,7 +119,7 @@ fn test_func() {
 
         fft_forward.process(&mut complex_samples);
 
-        let frequencies: Vec<usize> = vec![
+        let frequencies: Vec<f32> = vec![
             BIT_FREQUENCY_ON,
             BIT_FREQUENCY_OFF,
             BIT_FREQUENCY_NEXT,
@@ -129,9 +128,9 @@ fn test_func() {
         ];
 
         for frequency in frequencies.iter() {
-            let magnitude = fft_magnitude.calculate(&samples_chunk, *frequency);
+            let magnitude = fft_magnitude.get_magnitude(&samples_chunk, *frequency);
             if magnitude >= 0.2 {
-                let bin = fft_magnitude.get_bin(*frequency);
+                let bin = fft_magnitude.get_frequency_bin(*frequency);
                 maximize_bin(&mut complex_samples, bin, sample_size, max_magnitude);
             }
         }

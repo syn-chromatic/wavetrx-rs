@@ -1,10 +1,12 @@
 mod filters;
 mod processing;
-mod receiver;
+
+mod rx;
 mod transmitter;
 mod utils;
 
-use crate::receiver::{bits_to_string, receiver};
+use crate::rx::conversion::bits_to_string;
+use crate::rx::receiver::receiver;
 use crate::transmitter::generate_audio_data;
 
 pub const AUDIO_BPS: usize = 32;
@@ -18,12 +20,12 @@ pub const MIN_FREQ_SEP: f32 = AUDIO_SR as f32 / SAMPLE_SIZE;
 pub const LP_FILTER: f32 = 20_000.0;
 pub const HP_FILTER: f32 = 18_800.0;
 
-pub const BIT_FREQUENCY_ON: usize = 19_000;
-pub const BIT_FREQUENCY_OFF: usize = 19_200;
-pub const BIT_FREQUENCY_NEXT: usize = 19_400;
+pub const BIT_FREQUENCY_ON: f32 = 19_000.0;
+pub const BIT_FREQUENCY_OFF: f32 = 19_200.0;
+pub const BIT_FREQUENCY_NEXT: f32 = 19_400.0;
 
-pub const TRANSMIT_START_FREQUENCY: usize = 19_600;
-pub const TRANSMIT_END_FREQUENCY: usize = 19_800;
+pub const TRANSMIT_START_FREQUENCY: f32 = 19_600.0;
+pub const TRANSMIT_END_FREQUENCY: f32 = 19_800.0;
 
 pub const SAMPLING_MAGNITUDE: f32 = ((2usize.pow(AUDIO_BPS as u32 - 1)) - 1) as f32;
 pub const DB_THRESHOLD: f32 = 8.0;

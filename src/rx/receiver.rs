@@ -1,99 +1,16 @@
-use std::cmp::Ordering;
-use std::f32::consts;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::Arc;
 
 use hound;
 use hound::{WavReader, WavSpec};
 
-use rustfft::num_complex::Complex;
-use rustfft::Fft;
-use rustfft::FftPlanner;
-
 use crate::filters::{apply_highpass_filter, apply_lowpass_filter};
+use crate::rx::spectrum::{FourierMagnitude, Normalizer};
 use crate::utils::save_audio;
 use crate::{
     BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, DB_THRESHOLD, HP_FILTER, LP_FILTER,
     TONE_GAP_US, TONE_LENGTH_US, TRANSMIT_END_FREQUENCY, TRANSMIT_START_FREQUENCY,
 };
-
-fn tone_magnitude(samples: &[f32], target_frequency: usize, sample_rate: usize) -> f32 {
-    let mut q1: f32 = 0.0;
-    let mut q2: f32 = 0.0;
-
-    let sample_size: f32 = samples.len() as f32;
-    let k: usize = (0.5 + (sample_size * target_frequency as f32) / sample_rate as f32) as usize;
-    let w: f32 = 2.0 * consts::PI * k as f32 / sample_size;
-    let cosine: f32 = f32::cos(w);
-    let coeff: f32 = 2.0 * cosine;
-
-    for &sample in samples.iter() {
-        let q0: f32 = coeff * q1 - q2 + sample as f32;
-        q2 = q1;
-        q1 = q0;
-    }
-
-    let magnitude: f32 = ((q1 * q1) + (q2 * q2) - (q1 * q2 * coeff)).sqrt();
-    let normalization_factor: f32 = 2.0 / sample_size;
-    let magnitude: f32 = magnitude * normalization_factor;
-    let magnitude_db: f32 = 20.0 * magnitude.log10();
-    magnitude_db
-}
-
-pub struct FFTMagnitude {
-    fft: Arc<dyn Fft<f32>>,
-    sample_rate: usize,
-    sample_size: usize,
-    bitrate: usize,
-}
-
-impl FFTMagnitude {
-    pub fn new(sample_size: usize, spec: WavSpec) -> Self {
-        let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
-        let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(sample_size);
-        let sample_rate: usize = spec.sample_rate as usize;
-        let bitrate: usize = spec.bits_per_sample as usize;
-
-        FFTMagnitude {
-            fft,
-            sample_size,
-            sample_rate,
-            bitrate,
-        }
-    }
-
-    pub fn calculate(&self, samples: &[f32], target_frequency: usize) -> f32 {
-        let mut buffer: Vec<Complex<f32>> = samples.iter().map(|&s| Complex::new(s, 0.0)).collect();
-        self.fft.process(&mut buffer);
-
-        let bin: usize = self.get_bin(target_frequency);
-        let normalization_factor: f32 = 2.0 / self.sample_size as f32;
-        let magnitude: f32 = (buffer[bin].norm_sqr()).sqrt() * normalization_factor;
-        let magnitude_db: f32 = 20.0 * magnitude.log10();
-        magnitude_db
-    }
-
-    pub fn get_bin(&self, target_frequency: usize) -> usize {
-        let target_frequency: f32 = target_frequency as f32;
-        let sample_size: f32 = self.sample_size as f32;
-        let sample_rate: f32 = self.sample_rate as f32;
-        let bin: usize = ((target_frequency * sample_size) / sample_rate) as usize;
-        bin
-    }
-
-    pub fn get_sample_size(&self) -> usize {
-        self.sample_size
-    }
-
-    pub fn get_sample_rate(&self) -> usize {
-        self.sample_rate
-    }
-
-    pub fn get_bitrate(&self) -> usize {
-        self.bitrate
-    }
-}
 
 fn print_magnitude(
     start_magnitude: f32,
@@ -306,101 +223,18 @@ fn get_minimum_chunk_size(target_frequency: usize, num_cycles: usize, sample_rat
     (chunk_time * sample_rate as f32).ceil() as usize
 }
 
-fn positive_comparison(a: &&f32, b: &&f32) -> Ordering {
-    match (a.is_sign_positive(), b.is_sign_positive()) {
-        (true, false) => Ordering::Greater,
-        (false, true) => Ordering::Less,
-        (true, true) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
-        (false, false) => Ordering::Equal,
-    }
-}
+fn get_magnitudes(samples: &[f32], fft_magnitude: &FourierMagnitude) -> ReceiverMagnitudes {
+    let start_frequency: f32 = TRANSMIT_START_FREQUENCY;
+    let end_frequency: f32 = TRANSMIT_END_FREQUENCY;
+    let next_frequency: f32 = BIT_FREQUENCY_NEXT;
+    let on_frequency: f32 = BIT_FREQUENCY_ON;
+    let off_frequency: f32 = BIT_FREQUENCY_OFF;
 
-fn negative_comparison(a: &&f32, b: &&f32) -> Ordering {
-    match (a.is_sign_negative(), b.is_sign_negative()) {
-        (true, false) => Ordering::Greater,
-        (false, true) => Ordering::Less,
-        (true, true) => b.partial_cmp(a).unwrap_or(Ordering::Equal),
-        (false, false) => Ordering::Equal,
-    }
-}
-
-fn get_max_magnitudes(samples: &[f32]) -> (f32, f32) {
-    let positive_magnitude: &f32 = samples.iter().max_by(positive_comparison).unwrap();
-    let negative_magnitude: &f32 = samples.iter().max_by(negative_comparison).unwrap();
-    (*positive_magnitude, *negative_magnitude)
-}
-
-pub fn normalize_samples(samples: &[f32], bitrate: usize) -> Vec<f32> {
-    let mut normalized_samples: Vec<f32> = Vec::new();
-    let (mut positive, mut negative): (f32, f32) = get_max_magnitudes(samples);
-    let max_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
-
-    if positive < max_magnitude * 0.1 {
-        positive = f32::INFINITY;
-    }
-    if negative > -max_magnitude * 0.1 {
-        negative = f32::NEG_INFINITY;
-    }
-
-    println!(
-        "Positive: {} | Negative: {} | Max: {}",
-        positive, negative, max_magnitude
-    );
-
-    for sample in samples.iter() {
-        let sample: f32 = if sample.is_sign_positive() {
-            *sample / positive
-        } else {
-            *sample / negative.abs()
-        };
-
-        normalized_samples.push(sample);
-    }
-    normalized_samples
-}
-
-pub fn re_normalize_samples(samples: &mut [f32]) {
-    let (mut positive, mut negative): (f32, f32) = get_max_magnitudes(samples);
-
-    if positive < 0.1 {
-        positive = f32::INFINITY;
-    }
-    if negative > -0.1 {
-        negative = f32::NEG_INFINITY;
-    }
-
-    for sample in samples.iter_mut() {
-        if sample.is_sign_positive() {
-            *sample /= positive
-        } else {
-            *sample /= negative.abs()
-        };
-    }
-}
-
-pub fn de_normalize_samples(samples: &[f32], bitrate: usize) -> Vec<i32> {
-    let mut denormalized_samples: Vec<i32> = Vec::new();
-    let max_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
-
-    for sample in samples.iter() {
-        let denormalized_sample: f32 = sample * max_magnitude;
-        denormalized_samples.push(denormalized_sample as i32);
-    }
-    denormalized_samples
-}
-
-fn get_magnitudes(samples: &[f32], fft_magnitude: &FFTMagnitude) -> ReceiverMagnitudes {
-    let start_frequency: usize = TRANSMIT_START_FREQUENCY;
-    let end_frequency: usize = TRANSMIT_END_FREQUENCY;
-    let next_frequency: usize = BIT_FREQUENCY_NEXT;
-    let on_frequency: usize = BIT_FREQUENCY_ON;
-    let off_frequency: usize = BIT_FREQUENCY_OFF;
-
-    let start_magnitude: f32 = fft_magnitude.calculate(samples, start_frequency);
-    let end_magnitude: f32 = fft_magnitude.calculate(samples, end_frequency);
-    let next_magnitude: f32 = fft_magnitude.calculate(samples, next_frequency);
-    let on_magnitude: f32 = fft_magnitude.calculate(samples, on_frequency);
-    let off_magnitude: f32 = fft_magnitude.calculate(samples, off_frequency);
+    let start_magnitude: f32 = fft_magnitude.get_magnitude(samples, start_frequency);
+    let end_magnitude: f32 = fft_magnitude.get_magnitude(samples, end_frequency);
+    let next_magnitude: f32 = fft_magnitude.get_magnitude(samples, next_frequency);
+    let on_magnitude: f32 = fft_magnitude.get_magnitude(samples, on_frequency);
+    let off_magnitude: f32 = fft_magnitude.get_magnitude(samples, off_frequency);
 
     print_magnitude(
         start_magnitude,
@@ -420,7 +254,7 @@ fn get_magnitudes(samples: &[f32], fft_magnitude: &FFTMagnitude) -> ReceiverMagn
     magnitudes
 }
 
-fn get_starting_index(samples: &mut [f32], fft_magnitude: &FFTMagnitude) -> Option<usize> {
+fn get_starting_index(samples: &mut [f32], fft_magnitude: &FourierMagnitude) -> Option<usize> {
     let mut some_index: Option<usize> = None;
     let mut some_magnitude: Option<f32> = None;
     let mut tries: usize = 0;
@@ -429,8 +263,10 @@ fn get_starting_index(samples: &mut [f32], fft_magnitude: &FFTMagnitude) -> Opti
 
     for i in 0..(samples.len() - sample_size) {
         let samples_chunk: &mut [f32] = &mut samples[i..(i + sample_size)];
-        re_normalize_samples(samples_chunk);
-        let magnitude: f32 = fft_magnitude.calculate(samples_chunk, TRANSMIT_START_FREQUENCY);
+        let mut normalizer: Normalizer<'_> = Normalizer::new(samples_chunk);
+        normalizer.re_normalize(0.1);
+
+        let magnitude: f32 = fft_magnitude.get_magnitude(samples_chunk, TRANSMIT_START_FREQUENCY);
         if let Some(index_magnitude) = some_magnitude {
             if magnitude >= index_magnitude && magnitude <= DB_THRESHOLD {
                 tries = 0;
@@ -463,8 +299,11 @@ fn apply_filters(samples: &mut Vec<f32>, spec: WavSpec) {
 
 fn save_normalized(samples: &[f32], spec: WavSpec) {
     let bitrate: usize = spec.bits_per_sample as usize;
-    let de_normalized_samples: Vec<i32> = de_normalize_samples(&samples, bitrate);
-    save_audio("normalized.wav", &de_normalized_samples, spec);
+    let mut samples: Vec<f32> = samples.to_vec();
+    let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);
+    normalizer.re_normalize(0.1);
+    let samples: Vec<i32> = normalizer.to_i32();
+    save_audio("normalized.wav", &samples, spec);
 }
 
 pub fn receiver(filename: &str) -> Option<Vec<u8>> {
@@ -484,9 +323,10 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
 
     apply_filters(&mut samples, spec);
 
-    let mut samples: Vec<f32> = normalize_samples(&samples, bitrate);
+    let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);
+    normalizer.normalize(bitrate, 0.1);
 
-    let fft_magnitude: FFTMagnitude = FFTMagnitude::new(tone_size, spec);
+    let fft_magnitude: FourierMagnitude = FourierMagnitude::new(tone_size, spec);
     let start_index: Option<usize> = get_starting_index(&mut samples, &fft_magnitude);
 
     if let Some(mut index) = start_index {
@@ -497,7 +337,8 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
         let mut last_state: Option<ReceiverOutput> = None;
         while index + tone_size <= samples.len() {
             let samples_chunk: &mut [f32] = &mut samples[index..(index + tone_size)];
-            re_normalize_samples(samples_chunk);
+            let mut normalizer: Normalizer<'_> = Normalizer::new(samples_chunk);
+            normalizer.re_normalize(0.1);
             let magnitudes: ReceiverMagnitudes = get_magnitudes(samples_chunk, &fft_magnitude);
             let result: Option<ReceiverOutput> = receiver_states.handle_magnitudes(&magnitudes);
 
@@ -520,24 +361,4 @@ pub fn receiver(filename: &str) -> Option<Vec<u8>> {
         }
     }
     None
-}
-
-fn bits_to_bytes(bits: &Vec<u8>) -> Vec<u8> {
-    let mut bytes: Vec<u8> = Vec::new();
-    for chunk in bits.chunks(8) {
-        let mut byte: u8 = 0u8;
-        for (index, &bit) in chunk.iter().enumerate() {
-            if bit == 1 {
-                byte |= 1 << (7 - index);
-            }
-        }
-        bytes.push(byte);
-    }
-    bytes
-}
-
-pub fn bits_to_string(bits: &Vec<u8>) -> String {
-    let bytes: Vec<u8> = bits_to_bytes(bits);
-    let string: String = String::from_utf8(bytes).expect("Failed to convert to string");
-    string
 }
