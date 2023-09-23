@@ -102,10 +102,49 @@ fn print_magnitude(
     off_magnitude: f32,
     next_magnitude: f32,
 ) {
-    println!(
-        "ST: {} | EN: {} | ON: {} | OFF: {} | NXT: {}",
-        start_magnitude, end_magnitude, on_magnitude, off_magnitude, next_magnitude
-    );
+    let mut boolean = false;
+
+    if start_magnitude >= -DB_THRESHOLD && start_magnitude <= DB_THRESHOLD {
+        print!("Start: {:.2} dB", start_magnitude);
+        boolean = true;
+    }
+    if end_magnitude >= -DB_THRESHOLD && end_magnitude <= DB_THRESHOLD {
+        if boolean {
+            print!(" | ");
+        }
+        print!("End: {:.2} dB", end_magnitude);
+        boolean = true;
+    }
+    if on_magnitude >= -DB_THRESHOLD && on_magnitude <= DB_THRESHOLD {
+        if boolean {
+            print!(" | ");
+        }
+        print!("On: {:.2} dB", on_magnitude);
+        boolean = true;
+    }
+    if off_magnitude >= -DB_THRESHOLD && off_magnitude <= DB_THRESHOLD {
+        if boolean {
+            print!(" | ");
+        }
+        print!("Off: {:.2} dB", off_magnitude);
+        boolean = true;
+    }
+    if next_magnitude >= -DB_THRESHOLD && next_magnitude <= DB_THRESHOLD {
+        if boolean {
+            print!(" | ");
+        }
+        print!("Next: {:.2} dB", next_magnitude);
+        boolean = true;
+    }
+
+    if boolean {
+        println!();
+    }
+
+    // println!(
+    //     "ST: {:.2} dB | EN: {:.2} dB | ON: {:.2} dB | OFF: {:.2} dB | NXT: {:.2} dB",
+    //     start_magnitude, end_magnitude, on_magnitude, off_magnitude, next_magnitude
+    // );
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -393,7 +432,7 @@ fn get_starting_index(samples: &mut [f32], fft_magnitude: &FFTMagnitude) -> Opti
         re_normalize_samples(samples_chunk);
         let magnitude: f32 = fft_magnitude.calculate(samples_chunk, TRANSMIT_START_FREQUENCY);
         if let Some(index_magnitude) = some_magnitude {
-            if magnitude >= index_magnitude && magnitude <= 0.0 {
+            if magnitude >= index_magnitude && magnitude <= DB_THRESHOLD {
                 tries = 0;
                 some_index = Some(i);
                 some_magnitude = Some(magnitude);
