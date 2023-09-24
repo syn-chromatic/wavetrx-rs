@@ -18,9 +18,9 @@ impl Scalar for f32 {
     }
 }
 
-pub fn save_audio<T: Scalar>(filename: &str, samples: &[T], spec: WavSpec) {
+pub fn save_audio<T: Scalar>(filename: &str, samples: &[T], spec: &WavSpec) {
     let mut writer: WavWriter<BufWriter<File>> =
-        WavWriter::create(filename, spec).expect("Error creating WAV writer");
+        WavWriter::create(filename, spec.clone()).expect("Error creating WAV writer");
 
     for sample in samples {
         writer
@@ -28,5 +28,3 @@ pub fn save_audio<T: Scalar>(filename: &str, samples: &[T], spec: WavSpec) {
             .expect("Error writing sample");
     }
 }
-
-

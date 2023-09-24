@@ -11,7 +11,6 @@ pub struct FourierMagnitude {
     fft: Arc<dyn Fft<f32>>,
     sample_rate: usize,
     sample_size: usize,
-    bitrate: usize,
 }
 
 impl FourierMagnitude {
@@ -19,13 +18,11 @@ impl FourierMagnitude {
         let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
         let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(sample_size);
         let sample_rate: usize = spec.sample_rate as usize;
-        let bitrate: usize = spec.bits_per_sample as usize;
 
         FourierMagnitude {
             fft,
             sample_size,
             sample_rate,
-            bitrate,
         }
     }
 
@@ -49,35 +46,20 @@ impl FourierMagnitude {
         let k: usize = biased_frequency as usize;
         k
     }
-
-    pub fn get_sample_size(&self) -> usize {
-        self.sample_size
-    }
-
-    pub fn get_sample_rate(&self) -> usize {
-        self.sample_rate
-    }
-
-    pub fn get_bitrate(&self) -> usize {
-        self.bitrate
-    }
 }
 
 pub struct GoertzelMagnitude {
     sample_rate: usize,
     sample_size: usize,
-    bitrate: usize,
 }
 
 impl GoertzelMagnitude {
     pub fn new(sample_size: usize, spec: WavSpec) -> Self {
         let sample_rate: usize = spec.sample_rate as usize;
-        let bitrate: usize = spec.bits_per_sample as usize;
 
         GoertzelMagnitude {
             sample_size,
             sample_rate,
-            bitrate,
         }
     }
 
@@ -113,18 +95,6 @@ impl GoertzelMagnitude {
         let k: usize = biased_frequency as usize;
         k
     }
-
-    pub fn get_sample_size(&self) -> usize {
-        self.sample_size
-    }
-
-    pub fn get_sample_rate(&self) -> usize {
-        self.sample_rate
-    }
-
-    pub fn get_bitrate(&self) -> usize {
-        self.bitrate
-    }
 }
 
 pub struct Normalizer<'a> {
@@ -138,8 +108,8 @@ impl<'a> Normalizer<'a> {
 
     pub fn normalize(&mut self, bitrate: usize, min_floor: f32) {
         let (mut positive, mut negative): (f32, f32) = self.find_max_magnitudes();
-        let max_magnitude: f32 = self.get_max_bitrate_magnitude(bitrate) * min_floor;
-        self.clamp_max_magnitudes(&mut positive, &mut negative, max_magnitude);
+        let bitrate_magnitude: f32 = self.get_bitrate_magnitude(bitrate) * min_floor;
+        self.clamp_max_magnitudes(&mut positive, &mut negative, bitrate_magnitude);
 
         println!("Positive: {} | Negative: {}", positive, negative);
 
@@ -166,10 +136,10 @@ impl<'a> Normalizer<'a> {
     }
 
     pub fn de_normalize(&mut self, bitrate: usize) {
-        let max_magnitude: f32 = self.get_max_bitrate_magnitude(bitrate);
+        let bitrate_magnitude: f32 = self.get_bitrate_magnitude(bitrate);
 
         for sample in self.samples.iter_mut() {
-            *sample *= max_magnitude;
+            *sample *= bitrate_magnitude;
         }
     }
 
@@ -185,9 +155,9 @@ impl<'a> Normalizer<'a> {
 }
 
 impl<'a> Normalizer<'a> {
-    fn get_max_bitrate_magnitude(&self, bitrate: usize) -> f32 {
-        let max_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
-        max_magnitude
+    fn get_bitrate_magnitude(&self, bitrate: usize) -> f32 {
+        let bitrate_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
+        bitrate_magnitude
     }
 
     fn clamp_max_magnitudes(&self, positive: &mut f32, negative: &mut f32, min: f32) {

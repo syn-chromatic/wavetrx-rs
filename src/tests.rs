@@ -1,37 +1,13 @@
-mod consts;
-mod filters;
-mod processing;
-mod protocol;
-mod rx;
-mod tests;
-mod tx;
-mod utils;
-
 use crate::protocol::ProtocolProfile;
 use crate::rx::conversion::bits_to_string;
 use crate::rx::receiver::Receiver;
 use crate::tx::transmitter::Transmitter;
 
-use crate::consts::{
-    AUDIO_BPS, AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, MIN_FREQ_SEP,
-    TONE_GAP_US, TONE_LENGTH_US, TRANSMIT_END_FREQUENCY, TRANSMIT_START_FREQUENCY,
-};
+use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
+use crate::get_profile;
 
-fn get_profile() -> ProtocolProfile {
-    let start: f32 = TRANSMIT_START_FREQUENCY;
-    let end: f32 = TRANSMIT_END_FREQUENCY;
-    let next: f32 = BIT_FREQUENCY_NEXT;
-    let high: f32 = BIT_FREQUENCY_ON;
-    let low: f32 = BIT_FREQUENCY_OFF;
-    let tone_length: usize = TONE_LENGTH_US;
-    let gap_length: usize = TONE_GAP_US;
-
-    let profile: ProtocolProfile =
-        ProtocolProfile::new(start, end, next, high, low, tone_length, gap_length);
-    profile
-}
-
-fn transmitter() {
+#[test]
+fn test_transmitter() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
     let string: &str = "Test String";
@@ -54,9 +30,13 @@ fn transmitter() {
     println!("Generated {} bytes", data.len());
 }
 
-fn receiver() {
+#[test]
+fn test_receiver() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
+    // let filename: &str = "test7.wav";
+    // let filename: &str = "maximized_audio.wav";
+
     let profile: ProtocolProfile = get_profile();
     let receiver: Receiver = Receiver::new(profile);
     let bits: Option<Vec<u8>> = receiver.from_file(filename);
@@ -74,9 +54,4 @@ fn receiver() {
         println!();
         println!("{}", "-".repeat(20));
     }
-}
-
-fn main() {
-    transmitter();
-    receiver();
 }

@@ -7,47 +7,68 @@ use hound::{WavReader, WavSpec};
 
 use crate::utils::save_audio;
 
-pub fn apply_highpass_filter(samples: &mut Vec<f32>, highpass_frequency: f32, spec: WavSpec) {
-    let fs: Hertz<f32> = spec.sample_rate.hz();
-    let f0: Hertz<f32> = highpass_frequency.hz();
-    let filter: Type = Type::HighPass;
-    let q_value: f32 = 0.707;
+pub struct FrequencyFilters<'a> {
+    samples: &'a mut [f32],
+    spec: &'a WavSpec,
+}
 
-    let audio_bps: u16 = spec.bits_per_sample;
-    let max_magnitude: f32 = ((2i32.pow(audio_bps as u32 - 1)) - 1) as f32;
+impl<'a> FrequencyFilters<'a> {
+    pub fn new(samples: &'a mut [f32], spec: &'a WavSpec) -> Self {
+        FrequencyFilters { samples, spec }
+    }
 
-    let coefficients: Result<Coefficients<f32>, biquad::Errors> =
-        Coefficients::<f32>::from_params(filter, fs, f0, q_value);
+    pub fn apply_highpass(&mut self, frequency: f32) {
+        let coefficients: Result<Coefficients<f32>, biquad::Errors> =
+            self.get_coefficients(Type::HighPass, frequency);
 
-    if let Ok(coefficients) = coefficients {
-        let mut filter: DirectForm1<f32> = DirectForm1::<f32>::new(coefficients);
+        if let Ok(coefficients) = coefficients {
+            self.apply_coefficients(coefficients);
+        }
+    }
 
-        for sample in samples.iter_mut() {
-            *sample = filter.run(*sample);
-            if sample.is_sign_positive() && *sample > max_magnitude {
-                *sample = max_magnitude;
-            } else if sample.is_sign_negative() && *sample < -max_magnitude {
-                *sample = -max_magnitude;
-            }
+    pub fn apply_lowpass(&mut self, frequency: f32) {
+        let coefficients: Result<Coefficients<f32>, biquad::Errors> =
+            self.get_coefficients(Type::LowPass, frequency);
+
+        if let Ok(coefficients) = coefficients {
+            self.apply_coefficients(coefficients);
         }
     }
 }
 
-pub fn apply_lowpass_filter(samples: &mut Vec<f32>, lowpass_frequency: f32, spec: WavSpec) {
-    let fs: Hertz<f32> = spec.sample_rate.hz();
-    let f0: Hertz<f32> = lowpass_frequency.hz();
-    let filter: Type = Type::LowPass;
-    let q_value: f32 = 0.707;
+impl<'a> FrequencyFilters<'a> {
+    fn get_coefficients(
+        &self,
+        filter: Type,
+        frequency: f32,
+    ) -> Result<Coefficients<f32>, biquad::Errors> {
+        let fs: Hertz<f32> = self.spec.sample_rate.hz();
+        let f0: Hertz<f32> = frequency.hz();
+        let q_value: f32 = 0.707;
 
-    let coefficients: Result<Coefficients<f32>, biquad::Errors> =
-        Coefficients::<f32>::from_params(filter, fs, f0, q_value);
+        let coefficients: Result<Coefficients<f32>, biquad::Errors> =
+            Coefficients::<f32>::from_params(filter, fs, f0, q_value);
+        coefficients
+    }
 
-    if let Ok(coefficients) = coefficients {
+    fn apply_coefficients(&mut self, coefficients: Coefficients<f32>) {
+        let bitrate_magnitude: f32 = self.get_bitrate_magnitude();
         let mut filter: DirectForm1<f32> = DirectForm1::<f32>::new(coefficients);
 
-        for sample in samples.iter_mut() {
+        for sample in self.samples.iter_mut() {
             *sample = filter.run(*sample);
+            if sample.is_sign_positive() && *sample > bitrate_magnitude {
+                *sample = bitrate_magnitude;
+            } else if sample.is_sign_negative() && *sample < -bitrate_magnitude {
+                *sample = -bitrate_magnitude;
+            }
         }
+    }
+
+    fn get_bitrate_magnitude(&self) -> f32 {
+        let bitrate: u32 = self.spec.bits_per_sample as u32;
+        let bitrate_magnitude: f32 = ((2i32.pow(bitrate - 1)) - 1) as f32;
+        bitrate_magnitude
     }
 }
 
@@ -63,8 +84,9 @@ fn test_function() {
     let highpass_frequency: f32 = 1000.0;
     let lowpass_frequency: f32 = 1000.0;
 
-    apply_highpass_filter(&mut samples, highpass_frequency, spec);
-    apply_lowpass_filter(&mut samples, lowpass_frequency, spec);
+    let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(&mut samples, &spec);
+    filters.apply_highpass(highpass_frequency);
+    filters.apply_lowpass(lowpass_frequency);
 
-    save_audio("Test.wav", &samples, spec);
+    save_audio("Test.wav", &samples, &spec);
 }

@@ -167,5 +167,5 @@ fn test_func() {
     }
 
     print_samples(&samples);
-    save_audio("maximized_audio.wav", &samples, spec);
+    save_audio("maximized_audio.wav", &samples, &spec);
 }
