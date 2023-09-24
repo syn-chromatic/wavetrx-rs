@@ -16,5 +16,4 @@ pub const BIT_FREQUENCY_NEXT: f32 = 19_400.0;
 pub const TRANSMIT_START_FREQUENCY: f32 = 19_600.0;
 pub const TRANSMIT_END_FREQUENCY: f32 = 19_800.0;
 
-pub const SAMPLING_MAGNITUDE: f32 = ((2usize.pow(AUDIO_BPS as u32 - 1)) - 1) as f32;
 pub const DB_THRESHOLD: f32 = 8.0;

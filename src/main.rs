@@ -41,9 +41,9 @@ fn transmitter() {
 
     let profile: ProtocolProfile = get_profile();
     let sample_rate: usize = AUDIO_SR;
-    let bitrate: usize = AUDIO_BPS;
+    let bit_depth: usize = AUDIO_BPS;
 
-    let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bitrate);
+    let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
     let result: Result<(), hound::Error> = transmitter.create_file(filename, data);
 
     if let Err(err) = result {
@@ -79,7 +79,7 @@ fn receiver() {
 fn main() {
     println!("Transmitting..");
     transmitter();
-    println!("\n\n\n");
+    println!("\n");
 
     println!("Receiving..");
     receiver();

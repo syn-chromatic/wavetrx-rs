@@ -10,18 +10,18 @@ use crate::protocol::ProtocolProfile;
 pub struct ToneGenerator {
     writer: WavWriter<BufWriter<File>>,
     spec: WavSpec,
-    bitrate_magnitude: f32,
+    bit_depth_magnitude: f32,
 }
 
 impl ToneGenerator {
     pub fn new(filename: &str, spec: WavSpec) -> Result<Self, hound::Error> {
         let writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
-        let bitrate: u32 = spec.bits_per_sample as u32;
-        let bitrate_magnitude: f32 = ((2usize.pow(bitrate - 1)) - 1) as f32;
+        let bit_depth: u32 = spec.bits_per_sample as u32;
+        let bit_depth_magnitude: f32 = ((2usize.pow(bit_depth - 1)) - 1) as f32;
         let tone_generator: ToneGenerator = ToneGenerator {
             writer,
             spec,
-            bitrate_magnitude,
+            bit_depth_magnitude,
         };
         Ok(tone_generator)
     }
@@ -86,7 +86,7 @@ impl ToneGenerator {
 impl ToneGenerator {
     fn get_sine_magnitude(&self, idx: usize, period: f32) -> f32 {
         let sine_norm: f32 = (2.0 * consts::PI * idx as f32 / period).sin();
-        let sine_magnitude: f32 = sine_norm * self.bitrate_magnitude;
+        let sine_magnitude: f32 = sine_norm * self.bit_depth_magnitude;
         sine_magnitude
     }
 
@@ -117,15 +117,15 @@ impl ToneGenerator {
 pub struct Transmitter {
     profile: ProtocolProfile,
     sample_rate: usize,
-    bitrate: usize,
+    bit_depth: usize,
 }
 
 impl Transmitter {
-    pub fn new(profile: ProtocolProfile, sample_rate: usize, bitrate: usize) -> Self {
+    pub fn new(profile: ProtocolProfile, sample_rate: usize, bit_depth: usize) -> Self {
         Transmitter {
             profile,
             sample_rate,
-            bitrate,
+            bit_depth,
         }
     }
 
@@ -152,7 +152,7 @@ impl Transmitter {
         let spec: WavSpec = WavSpec {
             channels: 1,
             sample_rate: self.sample_rate as u32,
-            bits_per_sample: self.bitrate as u16,
+            bits_per_sample: self.bit_depth as u16,
             sample_format: SampleFormat::Int,
         };
         spec

@@ -59,8 +59,8 @@ impl Receiver {
         let lowpass_frequency: f32 = LP_FILTER;
 
         let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(samples, spec);
-        filters.apply_highpass(highpass_frequency);
-        filters.apply_lowpass(lowpass_frequency);
+        filters.apply_highpass(highpass_frequency, 0.707);
+        filters.apply_lowpass(lowpass_frequency, 0.707);
         save_audio("processed.wav", &samples, spec);
     }
 
@@ -219,9 +219,9 @@ impl Receiver {
     }
 
     fn normalize_samples(&self, samples: &mut [f32], spec: &WavSpec) {
-        let bitrate: usize = spec.bits_per_sample as usize;
+        let bit_depth: usize = spec.bits_per_sample as usize;
         let mut normalizer: Normalizer<'_> = Normalizer::new(samples);
-        normalizer.normalize(bitrate, 0.1);
+        normalizer.normalize(bit_depth, 0.1);
     }
 
     fn re_normalize_samples_chunk(&self, chunk: &mut [f32]) {
@@ -272,10 +272,10 @@ fn print_magnitude(magnitudes: &RxMagnitudes) {
 }
 
 fn save_normalized(samples: &[f32], spec: &WavSpec) {
-    let bitrate: usize = spec.bits_per_sample as usize;
+    let bit_depth: usize = spec.bits_per_sample as usize;
     let mut samples: Vec<f32> = samples.to_vec();
     let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);
-    normalizer.de_normalize(bitrate);
+    normalizer.de_normalize(bit_depth);
     let samples: Vec<i32> = normalizer.to_i32();
     save_audio("normalized.wav", &samples, spec);
 }

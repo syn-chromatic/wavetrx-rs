@@ -7,6 +7,8 @@ use rustfft::num_complex::Complex;
 use rustfft::Fft;
 use rustfft::FftPlanner;
 
+use crate::utils::get_bit_depth_magnitudes;
+
 pub struct FourierMagnitude {
     fft: Arc<dyn Fft<f32>>,
     sample_rate: usize,
@@ -106,17 +108,15 @@ impl<'a> Normalizer<'a> {
         Normalizer { samples }
     }
 
-    pub fn normalize(&mut self, bitrate: usize, min_floor: f32) {
+    pub fn normalize(&mut self, bit_depth: usize, min_floor: f32) {
         let (mut positive, mut negative): (f32, f32) = self.find_max_magnitudes();
-        let bitrate_magnitude: f32 = self.get_bitrate_magnitude(bitrate) * min_floor;
-        self.clamp_max_magnitudes(&mut positive, &mut negative, bitrate_magnitude);
-
-        println!("Positive: {} | Negative: {}", positive, negative);
+        let (p_min, n_min): (f32, f32) = self.get_normalization_mins(bit_depth, min_floor);
+        self.clamp_max_magnitudes(&mut positive, &mut negative, p_min, n_min);
 
         for sample in self.samples.iter_mut() {
             if sample.is_sign_positive() {
                 *sample /= positive
-            } else {
+            } else if sample.is_sign_negative() {
                 *sample /= negative.abs()
             };
         }
@@ -124,22 +124,27 @@ impl<'a> Normalizer<'a> {
 
     pub fn re_normalize(&mut self, min_floor: f32) {
         let (mut positive, mut negative): (f32, f32) = self.find_max_magnitudes();
-        self.clamp_max_magnitudes(&mut positive, &mut negative, min_floor);
+        let (p_min, n_min): (f32, f32) = (min_floor, -min_floor);
+        self.clamp_max_magnitudes(&mut positive, &mut negative, p_min, n_min);
 
         for sample in self.samples.iter_mut() {
             if sample.is_sign_positive() {
                 *sample /= positive
-            } else {
+            } else if sample.is_sign_negative() {
                 *sample /= negative.abs()
             };
         }
     }
 
-    pub fn de_normalize(&mut self, bitrate: usize) {
-        let bitrate_magnitude: f32 = self.get_bitrate_magnitude(bitrate);
+    pub fn de_normalize(&mut self, bit_depth: usize) {
+        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(bit_depth);
 
         for sample in self.samples.iter_mut() {
-            *sample *= bitrate_magnitude;
+            if sample.is_sign_positive() {
+                *sample *= p_magnitude;
+            } else if sample.is_sign_negative() {
+                *sample *= n_magnitude.abs();
+            }
         }
     }
 
@@ -155,16 +160,18 @@ impl<'a> Normalizer<'a> {
 }
 
 impl<'a> Normalizer<'a> {
-    fn get_bitrate_magnitude(&self, bitrate: usize) -> f32 {
-        let bitrate_magnitude: f32 = ((2usize.pow(bitrate as u32 - 1)) - 1) as f32;
-        bitrate_magnitude
+    fn get_normalization_mins(&self, bit_depth: usize, min_floor: f32) -> (f32, f32) {
+        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(bit_depth);
+        let p_min: f32 = p_magnitude * min_floor;
+        let n_min: f32 = n_magnitude * min_floor;
+        (p_min, n_min)
     }
 
-    fn clamp_max_magnitudes(&self, positive: &mut f32, negative: &mut f32, min: f32) {
-        if *positive < min {
+    fn clamp_max_magnitudes(&self, positive: &mut f32, negative: &mut f32, p_min: f32, n_min: f32) {
+        if *positive < p_min {
             *positive = f32::INFINITY;
         }
-        if *negative > -min {
+        if *negative > n_min {
             *negative = f32::NEG_INFINITY;
         }
     }
