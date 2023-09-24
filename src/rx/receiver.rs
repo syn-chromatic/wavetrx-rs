@@ -73,11 +73,15 @@ impl Receiver {
         let mut current_best_idx: Option<usize> = None;
         let mut current_best_magnitude: Option<f32> = None;
         let mut consecutive_fails: usize = 0;
-        let max_consecutive_fails: usize = 50;
+        let max_consecutive_fails: usize = 10;
 
-        for idx in 0..(samples.len() - sample_size) {
-            let samples_chunk: &mut [f32] = self.get_samples_chunk(samples, idx, sample_size);
-            let magnitude: f32 = freq_mag.get_magnitude(samples_chunk, self.profile.start);
+        let mut idx: usize = 0;
+        let skip_cycles: usize = 16;
+        let sample_rate: usize = freq_mag.get_sample_rate();
+
+        while idx < (samples.len() - sample_size) {
+            let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
+            let magnitude: f32 = freq_mag.get_magnitude(&samples_chunk, self.profile.start);
 
             let terminate: bool = self.update_starting_index_search(
                 idx,
@@ -90,6 +94,7 @@ impl Receiver {
             if terminate {
                 break;
             }
+            self.update_starting_index(&mut idx, skip_cycles, sample_rate, &current_best_magnitude);
         }
         current_best_idx
     }
@@ -124,6 +129,22 @@ impl Receiver {
             }
         }
         false
+    }
+
+    fn update_starting_index(
+        &self,
+        idx: &mut usize,
+        cycles: usize,
+        sample_rate: usize,
+        current_best_magnitude: &Option<f32>,
+    ) {
+        if current_best_magnitude.is_none() {
+            let frequency: f32 = self.profile.start;
+            let idx_skip: usize = self.get_minimum_chunk_size(frequency, cycles, sample_rate);
+            *idx += idx_skip;
+        } else {
+            *idx += 1;
+        }
     }
 
     fn read_file(&self, filename: &str) -> (Vec<f32>, WavSpec) {
@@ -196,14 +217,9 @@ impl Receiver {
         magnitudes
     }
 
-    fn get_minimum_chunk_size(
-        &self,
-        target_frequency: usize,
-        num_cycles: usize,
-        sample_rate: usize,
-    ) -> usize {
-        let time_for_one_cycle: f32 = 1.0 / target_frequency as f32;
-        let chunk_time: f32 = num_cycles as f32 * time_for_one_cycle;
+    fn get_minimum_chunk_size(&self, frequency: f32, cycles: usize, sample_rate: usize) -> usize {
+        let time_for_one_cycle: f32 = 1.0 / frequency;
+        let chunk_time: f32 = cycles as f32 * time_for_one_cycle;
         (chunk_time * sample_rate as f32).ceil() as usize
     }
 
@@ -215,6 +231,17 @@ impl Receiver {
     ) -> &'a mut [f32] {
         let samples_chunk: &mut [f32] = &mut samples[idx..(idx + sample_size)];
         self.re_normalize_samples_chunk(samples_chunk);
+        samples_chunk
+    }
+
+    fn get_owned_samples_chunk<'a>(
+        &self,
+        samples: &'a [f32],
+        idx: usize,
+        sample_size: usize,
+    ) -> Vec<f32> {
+        let mut samples_chunk: Vec<f32> = samples[idx..(idx + sample_size)].to_vec();
+        self.re_normalize_samples_chunk(&mut samples_chunk);
         samples_chunk
     }
 

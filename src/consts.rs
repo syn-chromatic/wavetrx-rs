@@ -1,4 +1,4 @@
-pub const AUDIO_BPS: usize = 16;
+pub const AUDIO_BPS: usize = 32;
 pub const AUDIO_SR: usize = 48_000;
 pub const TONE_LENGTH_US: usize = 10_000;
 pub const TONE_GAP_US: usize = 10_000;

@@ -48,6 +48,14 @@ impl FourierMagnitude {
         let k: usize = biased_frequency as usize;
         k
     }
+
+    pub fn get_sample_rate(&self) -> usize {
+        self.sample_rate
+    }
+
+    pub fn get_sample_size(&self) -> usize {
+        self.sample_size
+    }
 }
 
 pub struct GoertzelMagnitude {
@@ -97,6 +105,14 @@ impl GoertzelMagnitude {
         let k: usize = biased_frequency as usize;
         k
     }
+
+    pub fn get_sample_rate(&self) -> usize {
+        self.sample_rate
+    }
+
+    pub fn get_sample_size(&self) -> usize {
+        self.sample_size
+    }
 }
 
 pub struct Normalizer<'a> {
@@ -114,11 +130,13 @@ impl<'a> Normalizer<'a> {
         self.clamp_max_magnitudes(&mut positive, &mut negative, p_min, n_min);
 
         for sample in self.samples.iter_mut() {
-            if sample.is_sign_positive() {
-                *sample /= positive
-            } else if sample.is_sign_negative() {
-                *sample /= negative.abs()
-            };
+            if sample.is_normal() {
+                if sample.is_sign_positive() {
+                    *sample /= positive
+                } else if sample.is_sign_negative() {
+                    *sample /= negative.abs()
+                };
+            }
         }
     }
 
@@ -128,11 +146,13 @@ impl<'a> Normalizer<'a> {
         self.clamp_max_magnitudes(&mut positive, &mut negative, p_min, n_min);
 
         for sample in self.samples.iter_mut() {
-            if sample.is_sign_positive() {
-                *sample /= positive
-            } else if sample.is_sign_negative() {
-                *sample /= negative.abs()
-            };
+            if sample.is_normal() {
+                if sample.is_sign_positive() {
+                    *sample /= positive
+                } else if sample.is_sign_negative() {
+                    *sample /= negative.abs()
+                };
+            }
         }
     }
 
@@ -140,10 +160,12 @@ impl<'a> Normalizer<'a> {
         let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(bit_depth);
 
         for sample in self.samples.iter_mut() {
-            if sample.is_sign_positive() {
-                *sample *= p_magnitude;
-            } else if sample.is_sign_negative() {
-                *sample *= n_magnitude.abs();
+            if sample.is_normal() {
+                if sample.is_sign_positive() {
+                    *sample *= p_magnitude;
+                } else if sample.is_sign_negative() {
+                    *sample *= n_magnitude.abs();
+                }
             }
         }
     }
