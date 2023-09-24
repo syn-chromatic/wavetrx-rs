@@ -8,9 +8,9 @@ mod tx;
 mod utils;
 
 use crate::protocol::ProtocolProfile;
-use crate::rx::conversion::bits_to_string;
 use crate::rx::receiver::Receiver;
 use crate::tx::transmitter::Transmitter;
+use crate::utils::bits_to_string;
 
 use crate::consts::{
     AUDIO_BPS, AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, MIN_FREQ_SEP,
@@ -77,6 +77,10 @@ fn receiver() {
 }
 
 fn main() {
+    println!("Transmitting..");
     transmitter();
+    println!("\n\n\n");
+
+    println!("Receiving..");
     receiver();
 }

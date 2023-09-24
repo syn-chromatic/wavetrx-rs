@@ -1,7 +1,7 @@
 use crate::protocol::ProtocolProfile;
-use crate::rx::conversion::bits_to_string;
 use crate::rx::receiver::Receiver;
 use crate::tx::transmitter::Transmitter;
+use crate::utils::bits_to_string;
 
 use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
 use crate::get_profile;
