@@ -36,9 +36,11 @@ impl Receiver {
 
         let freq_mag: FourierMagnitude = FourierMagnitude::new(tsz, spec);
         let start_index: Option<usize> = self.find_starting_index(&mut samples, tsz, &freq_mag);
+        let sample_rate: usize = freq_mag.get_sample_rate();
 
         if let Some(idx) = start_index {
-            println!("Found start at sample index: {}", idx);
+            let timestamp: f32 = self.get_timestamp(idx, sample_rate);
+            println!("Start Index: {} | Timestamp: {:.3}", idx, timestamp);
             let (bits, output): (Vec<u8>, Option<RxOutput>) =
                 self.receive_bits(idx, tsz, gsz, &mut samples, &freq_mag);
 
@@ -54,6 +56,11 @@ impl Receiver {
 }
 
 impl Receiver {
+    fn get_timestamp(&self, idx: usize, sample_rate: usize) -> f32 {
+        let timestamp = idx as f32 / sample_rate as f32;
+        timestamp
+    }
+
     fn apply_frequency_filters(&self, samples: &mut [f32], spec: &WavSpec) {
         let highpass_frequency: f32 = HP_FILTER;
         let lowpass_frequency: f32 = LP_FILTER;
@@ -73,10 +80,10 @@ impl Receiver {
         let mut current_best_idx: Option<usize> = None;
         let mut current_best_magnitude: Option<f32> = None;
         let mut consecutive_fails: usize = 0;
-        let max_consecutive_fails: usize = 10;
+        let max_consecutive_fails: usize = 50;
 
         let mut idx: usize = 0;
-        let skip_cycles: usize = 16;
+        let skip_cycles: usize = 8;
         let sample_rate: usize = freq_mag.get_sample_rate();
 
         while idx < (samples.len() - sample_size) {
@@ -171,6 +178,7 @@ impl Receiver {
             let samples_chunk: &mut [f32] = self.get_samples_chunk(samples, idx, tsz);
             let magnitudes: RxMagnitudes = self.get_magnitudes(&samples_chunk, &freq_mag);
             let output: Option<RxOutput> = resolver.resolve(&magnitudes);
+            self.mute_samples_gap(samples, idx, tsz, gsz);
 
             last_output = output.clone();
             idx += tsz + gsz;
@@ -229,9 +237,27 @@ impl Receiver {
         idx: usize,
         sample_size: usize,
     ) -> &'a mut [f32] {
-        let samples_chunk: &mut [f32] = &mut samples[idx..(idx + sample_size)];
+        let en_index: usize = idx + sample_size;
+        let en_index: usize = self.clamp_ending_index(samples, en_index);
+        let samples_chunk: &mut [f32] = &mut samples[idx..en_index];
         self.re_normalize_samples_chunk(samples_chunk);
         samples_chunk
+    }
+
+    fn mute_samples_gap<'a>(&self, samples: &'a mut [f32], idx: usize, tsz: usize, gsz: usize) {
+        let en_index: usize = idx + tsz + gsz;
+        let en_index: usize = self.clamp_ending_index(samples, en_index);
+        let samples_chunk: &mut [f32] = &mut samples[idx + tsz..en_index];
+        for sample in samples_chunk.iter_mut() {
+            *sample = 0.0;
+        }
+    }
+
+    fn clamp_ending_index(&self, samples: &[f32], index: usize) -> usize {
+        if index > samples.len() {
+            return samples.len();
+        }
+        index
     }
 
     fn get_owned_samples_chunk<'a>(

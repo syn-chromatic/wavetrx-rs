@@ -34,7 +34,7 @@ fn test_transmitter() {
 fn test_receiver() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     // let filename: &str = "transmitted_audio.wav";
-    let filename: &str = "test7.wav";
+    let filename: &str = "test8.wav";
     // let filename: &str = "maximized_audio.wav";
 
     let profile: ProtocolProfile = get_profile();
