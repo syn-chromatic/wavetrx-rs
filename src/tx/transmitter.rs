@@ -6,22 +6,24 @@ use hound;
 use hound::{SampleFormat, WavSpec, WavWriter};
 
 use crate::protocol::ProtocolProfile;
+use crate::utils::get_bit_depth_magnitudes;
 
 pub struct ToneGenerator {
     writer: WavWriter<BufWriter<File>>,
     spec: WavSpec,
-    bit_depth_magnitude: f32,
+    p_magnitude: f32,
+    n_magnitude: f32,
 }
 
 impl ToneGenerator {
     pub fn new(filename: &str, spec: WavSpec) -> Result<Self, hound::Error> {
         let writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
-        let bit_depth: u32 = spec.bits_per_sample as u32;
-        let bit_depth_magnitude: f32 = ((2usize.pow(bit_depth - 1)) - 1) as f32;
+        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(&spec);
         let tone_generator: ToneGenerator = ToneGenerator {
             writer,
             spec,
-            bit_depth_magnitude,
+            p_magnitude,
+            n_magnitude,
         };
         Ok(tone_generator)
     }
@@ -86,8 +88,10 @@ impl ToneGenerator {
 impl ToneGenerator {
     fn get_sine_magnitude(&self, idx: usize, period: f32) -> f32 {
         let sine_norm: f32 = (2.0 * consts::PI * idx as f32 / period).sin();
-        let sine_magnitude: f32 = sine_norm * self.bit_depth_magnitude;
-        sine_magnitude
+        if sine_norm.is_sign_positive() {
+            return sine_norm * self.p_magnitude;
+        }
+        sine_norm * self.n_magnitude.abs()
     }
 
     fn get_sine_fade_coeff(&self, idx: usize, sample_size: usize, fade_size: usize) -> f32 {

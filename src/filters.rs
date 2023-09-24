@@ -75,16 +75,15 @@ impl<'a> FrequencyFilters<'a> {
     }
 
     fn apply_coefficients(&mut self, coefficients: Coefficients<f32>) {
-        let (positive_magnitude, negative_magnitude): (f32, f32) =
-            get_bit_depth_magnitudes(self.spec);
+        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(self.spec);
         let mut filter: DirectForm1<f32> = DirectForm1::<f32>::new(coefficients);
 
         for sample in self.samples.iter_mut() {
             *sample = filter.run(*sample);
-            if sample.is_sign_positive() && *sample > positive_magnitude {
-                *sample = positive_magnitude;
-            } else if sample.is_sign_negative() && *sample < negative_magnitude {
-                *sample = negative_magnitude;
+            if sample.is_sign_positive() && *sample > p_magnitude {
+                *sample = p_magnitude;
+            } else if sample.is_sign_negative() && *sample < n_magnitude {
+                *sample = n_magnitude;
             }
         }
     }
