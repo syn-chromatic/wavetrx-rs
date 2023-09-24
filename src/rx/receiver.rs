@@ -6,163 +6,12 @@ use hound::{WavReader, WavSpec};
 
 use crate::filters::FrequencyFilters;
 use crate::protocol::ProtocolProfile;
+use crate::rx::resolver::RxResolver;
 use crate::rx::spectrum::{FourierMagnitude, Normalizer};
+use crate::rx::states::{RxMagnitudes, RxOutput};
 use crate::utils::save_audio;
 
 use crate::consts::{DB_THRESHOLD, HP_FILTER, LP_FILTER};
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum States {
-    Start,
-    End,
-    Next,
-    Bit,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum RxOutput {
-    Bit(u8),
-    End,
-    Error,
-}
-
-struct RxMagnitudes {
-    start: f32,
-    end: f32,
-    next: f32,
-    high: f32,
-    low: f32,
-}
-
-impl RxMagnitudes {
-    fn new(start: f32, end: f32, next: f32, high: f32, low: f32) -> Self {
-        RxMagnitudes {
-            start,
-            end,
-            next,
-            high,
-            low,
-        }
-    }
-
-    fn evaluate(&self, state: &States) -> bool {
-        match state {
-            States::Start => self.within_range(self.start),
-            States::End => self.within_range(self.end),
-            States::Next => self.within_range(self.next),
-            States::Bit => self.within_range(self.high) || self.within_range(self.low),
-        }
-    }
-
-    fn within_range(&self, value: f32) -> bool {
-        value >= -DB_THRESHOLD && value <= DB_THRESHOLD
-    }
-
-    fn get_bit(&self) -> u8 {
-        if self.high > self.low {
-            return 1;
-        }
-        0
-    }
-}
-
-#[derive(Debug)]
-struct RxStates {
-    selection: Option<States>,
-    expectation: States,
-    end_selection: Option<States>,
-    end_expectation: Option<States>,
-}
-
-impl RxStates {
-    fn new() -> Self {
-        let selection: Option<States> = None;
-        let expectation: States = States::Start;
-        let end_selection: Option<States> = None;
-        let end_expectation: Option<States> = None;
-        RxStates {
-            selection,
-            expectation,
-            end_selection,
-            end_expectation,
-        }
-    }
-
-    fn set_expectation(&mut self) {
-        if self.expectation == States::Start || self.expectation == States::Bit {
-            self.selection = Some(self.expectation.clone());
-            self.expectation = States::Next;
-        } else if self.expectation == States::Next {
-            if let Some(selection) = &self.selection {
-                if *selection == States::Start || *selection == States::Bit {
-                    self.expectation = States::Bit;
-                }
-            }
-        }
-    }
-
-    fn evaluate_end(&mut self, magnitudes: &RxMagnitudes) -> bool {
-        if self.expectation == States::Bit {
-            if let Some(selection) = &self.selection {
-                if *selection == States::Bit {
-                    if magnitudes.evaluate(&States::End) {
-                        self.end_selection = Some(States::End);
-                        self.end_expectation = Some(States::Next);
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    fn resolve_end(
-        &mut self,
-        magnitudes: &RxMagnitudes,
-        end_evaluation: bool,
-        evaluation: bool,
-    ) -> Option<RxOutput> {
-        if !end_evaluation {
-            if let Some(end_expectation) = &self.end_expectation {
-                let end_evaluation = magnitudes.evaluate(end_expectation);
-                if end_evaluation && !evaluation {
-                    return Some(RxOutput::End);
-                } else {
-                    self.end_selection = None;
-                    self.end_expectation = None;
-                }
-            }
-        }
-        None
-    }
-
-    fn handle_magnitudes(&mut self, magnitudes: &RxMagnitudes) -> Option<RxOutput> {
-        let end_evaluation: bool = self.evaluate_end(magnitudes);
-        let evaluation: bool = magnitudes.evaluate(&self.expectation);
-
-        let end_resolve: Option<RxOutput> =
-            self.resolve_end(magnitudes, end_evaluation, evaluation);
-        if end_resolve.is_some() {
-            return end_resolve;
-        }
-
-        if evaluation {
-            self.set_expectation();
-
-            if self.expectation == States::Next {
-                if let Some(selection) = &self.selection {
-                    if *selection == States::Bit {
-                        let bit: u8 = magnitudes.get_bit();
-                        return Some(RxOutput::Bit(bit));
-                    }
-                }
-            }
-        } else if !evaluation && !end_evaluation {
-            return Some(RxOutput::Error);
-        }
-        None
-    }
-}
 
 pub struct Receiver {
     profile: ProtocolProfile,
@@ -294,13 +143,13 @@ impl Receiver {
         freq_mag: &FourierMagnitude,
     ) -> (Vec<u8>, Option<RxOutput>) {
         let mut bits: Vec<u8> = Vec::new();
-        let mut rx_states: RxStates = RxStates::new();
+        let mut resolver: RxResolver = RxResolver::new();
         let mut last_output: Option<RxOutput> = None;
 
         while idx + tsz <= samples.len() {
             let samples_chunk: &mut [f32] = self.get_samples_chunk(samples, idx, tsz);
             let magnitudes: RxMagnitudes = self.get_magnitudes(&samples_chunk, &freq_mag);
-            let output: Option<RxOutput> = rx_states.handle_magnitudes(&magnitudes);
+            let output: Option<RxOutput> = resolver.resolve(&magnitudes);
 
             last_output = output.clone();
             idx += tsz + gsz;
