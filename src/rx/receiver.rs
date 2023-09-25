@@ -9,7 +9,7 @@ use crate::protocol::ProtocolProfile;
 use crate::rx::resolver::RxResolver;
 use crate::rx::spectrum::{FourierMagnitude, Normalizer};
 use crate::rx::states::{RxMagnitudes, RxOutput};
-use crate::utils::save_audio;
+use crate::utils::{bits_to_string, save_audio};
 
 use crate::consts::{DB_THRESHOLD, HP_FILTER, LP_FILTER};
 
@@ -80,7 +80,7 @@ impl Receiver {
         let mut current_best_idx: Option<usize> = None;
         let mut current_best_magnitude: Option<f32> = None;
         let mut consecutive_fails: usize = 0;
-        let max_consecutive_fails: usize = 50;
+        let max_consecutive_fails: usize = 5;
 
         let mut idx: usize = 0;
         let skip_cycles: usize = 8;
@@ -283,6 +283,316 @@ impl Receiver {
     }
 }
 
+// ------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------
+
+pub struct LiveReceiver {
+    profile: ProtocolProfile,
+    buffer: Vec<f32>,
+    bits: Vec<u8>,
+    resolver: RxResolver,
+    spec: WavSpec,
+    frequency_magnitude: FourierMagnitude,
+    sample_size: usize,
+    start_idx: Option<usize>,
+    start_signal: bool,
+}
+
+impl LiveReceiver {
+    pub fn new(profile: ProtocolProfile, spec: WavSpec) -> Self {
+        let buffer: Vec<f32> = Vec::new();
+        let bits: Vec<u8> = Vec::new();
+        let resolver: RxResolver = RxResolver::new();
+        let sample_rate: usize = spec.sample_rate as usize;
+        let sample_size: usize = (sample_rate * profile.tone_length) as usize / 1_000_000;
+        let frequency_magnitude: FourierMagnitude = FourierMagnitude::new(sample_size, spec);
+        let start_idx: Option<usize> = None;
+        let start_signal: bool = false;
+        LiveReceiver {
+            profile,
+            buffer,
+            bits,
+            resolver,
+            spec,
+            frequency_magnitude,
+            sample_size,
+            start_idx,
+            start_signal,
+        }
+    }
+
+    pub fn append_audio_samples(&mut self, samples: &mut [f32]) {
+        let tsz: usize = self.get_tone_sample_size();
+        let gsz: usize = self.get_gap_sample_size();
+
+        // println!(
+        //     "Buffer: {} | Buffer Time: {:.3} | ST: {:?}",
+        //     self.buffer.len(),
+        //     self.get_timestamp(self.buffer.len(), self.spec.sample_rate as usize),
+        //     self.start_idx,
+        // );
+
+        // self.apply_frequency_filters(samples);
+        // self.normalize_samples(samples);
+        self.re_normalize_samples_chunk(samples);
+        self.buffer.append(&mut samples.to_vec());
+
+        if self.start_idx.is_some() && self.start_signal {
+            let mut idx: usize = self.start_idx.unwrap();
+            if self.buffer.len() > idx + self.sample_size {
+                while idx + self.sample_size < self.buffer.len() {
+                    let output: Option<RxOutput> = self.receive_bits(idx);
+                    if let Some(output) = output {
+                        match output {
+                            RxOutput::Bit(bit) => {
+                                self.bits.push(bit);
+                                print!("# Bits Received: {}  \r", self.bits.len());
+                            }
+                            RxOutput::End => {
+                                let string = bits_to_string(&self.bits);
+                                println!("\n# Decoded Bits: {}\n", string);
+                                self.refresh_all_states();
+                            }
+                            RxOutput::Error => {
+                                self.refresh_all_states();
+                            }
+                        }
+                    }
+                    idx += tsz + gsz;
+                    self.start_idx = Some(idx);
+                }
+            }
+        } else {
+            if self.buffer.len() >= self.sample_size * 8 {
+                let start_idx: Option<usize> = self.find_starting_index();
+                if start_idx.is_some() {
+                    self.start_idx = start_idx;
+                    self.start_signal = true;
+                    println!("# Detected Start Signal");
+                } else {
+                    self.refresh_all_states();
+                }
+            }
+        }
+    }
+
+    pub fn get_sample_size(&self) -> usize {
+        self.sample_size
+    }
+
+    pub fn save(&self, filename: &str) {
+        save_normalized_name(filename, &self.buffer, &self.spec);
+    }
+}
+
+impl LiveReceiver {
+    fn refresh_all_states(&mut self) {
+        self.refresh_buffer();
+        self.bits.clear();
+        self.resolver.reset();
+        self.start_idx = None;
+        self.start_signal = false;
+    }
+
+    fn refresh_buffer(&mut self) {
+        if let Some(idx) = self.start_idx {
+            self.drain_buffer_to_starting_index(idx)
+        } else {
+            let idx: usize = self.buffer.len() - (self.sample_size * 8);
+            self.drain_buffer_to_starting_index(idx);
+        }
+    }
+
+    fn drain_buffer_to_starting_index(&mut self, idx: usize) {
+        if idx < self.buffer.len() {
+            self.buffer.drain(..idx);
+        } else {
+            self.buffer.clear();
+        }
+    }
+
+    fn get_timestamp(&self, idx: usize, sample_rate: usize) -> f32 {
+        let timestamp = idx as f32 / sample_rate as f32;
+        timestamp
+    }
+
+    fn apply_frequency_filters(&self, samples: &mut [f32]) {
+        let highpass_frequency: f32 = HP_FILTER;
+        let lowpass_frequency: f32 = LP_FILTER;
+
+        let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(samples, &self.spec);
+        filters.apply_highpass(highpass_frequency, 0.707);
+        filters.apply_lowpass(lowpass_frequency, 0.707);
+    }
+
+    fn find_starting_index(&self) -> Option<usize> {
+        let mut current_best_idx: Option<usize> = None;
+        let mut current_best_magnitude: Option<f32> = None;
+        let mut consecutive_fails: usize = 0;
+        let max_consecutive_fails: usize = 5;
+
+        let freq_mag: &FourierMagnitude = &self.frequency_magnitude;
+
+        let mut idx: usize = 0;
+        let skip_cycles: usize = 8;
+        let sample_rate: usize = freq_mag.get_sample_rate();
+        let sample_size: usize = self.sample_size;
+        let samples: &Vec<f32> = &self.buffer;
+
+        while idx < (samples.len() - sample_size) {
+            let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
+            let magnitude: f32 = freq_mag.get_magnitude(&samples_chunk, self.profile.start);
+
+            let terminate: bool = self.update_starting_index_search(
+                idx,
+                magnitude,
+                &mut current_best_idx,
+                &mut current_best_magnitude,
+                &mut consecutive_fails,
+                max_consecutive_fails,
+            );
+            if terminate {
+                break;
+            }
+            self.update_starting_index(&mut idx, skip_cycles, sample_rate, &current_best_magnitude);
+        }
+        current_best_idx
+    }
+
+    fn update_starting_index_search(
+        &self,
+        idx: usize,
+        magnitude: f32,
+        current_best_idx: &mut Option<usize>,
+        current_best_magnitude: &mut Option<f32>,
+        consecutive_fails: &mut usize,
+        max_consecutive_fails: usize,
+    ) -> bool {
+        match current_best_magnitude {
+            Some(previous_best_magnitude) => {
+                if magnitude >= *previous_best_magnitude && magnitude <= DB_THRESHOLD {
+                    *consecutive_fails = 0;
+                    *current_best_idx = Some(idx);
+                    *current_best_magnitude = Some(magnitude);
+                } else {
+                    if *consecutive_fails == max_consecutive_fails {
+                        return true;
+                    }
+                    *consecutive_fails += 1;
+                }
+            }
+            None => {
+                if magnitude >= -DB_THRESHOLD && magnitude <= DB_THRESHOLD {
+                    *current_best_idx = Some(idx);
+                    *current_best_magnitude = Some(magnitude);
+                }
+            }
+        }
+        false
+    }
+
+    fn update_starting_index(
+        &self,
+        idx: &mut usize,
+        cycles: usize,
+        sample_rate: usize,
+        current_best_magnitude: &Option<f32>,
+    ) {
+        if current_best_magnitude.is_none() {
+            let frequency: f32 = self.profile.start;
+            let idx_skip: usize = self.get_minimum_chunk_size(frequency, cycles, sample_rate);
+            *idx += idx_skip;
+        } else {
+            *idx += 1;
+        }
+    }
+
+    fn read_file(&self, filename: &str) -> (Vec<f32>, WavSpec) {
+        let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
+        let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+        let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
+        let spec: WavSpec = reader.spec();
+        (samples, spec)
+    }
+
+    fn receive_bits(&mut self, idx: usize) -> Option<RxOutput> {
+        let samples_chunk: Vec<f32> =
+            self.get_owned_samples_chunk(&self.buffer, idx, self.sample_size);
+        let magnitudes: RxMagnitudes = self.get_magnitudes(&samples_chunk);
+        let output: Option<RxOutput> = self.resolver.resolve(&magnitudes);
+        output
+    }
+
+    fn get_tone_sample_size(&self) -> usize {
+        let sample_rate: usize = self.spec.sample_rate as usize;
+        let tone_sample_size: usize = (sample_rate * self.profile.tone_length) as usize / 1_000_000;
+        tone_sample_size
+    }
+
+    fn get_gap_sample_size(&self) -> usize {
+        let sample_rate: usize = self.spec.sample_rate as usize;
+        let gap_sample_size: usize = (sample_rate * self.profile.gap_length) as usize / 1_000_000;
+        gap_sample_size
+    }
+
+    fn get_magnitudes(&self, samples: &[f32]) -> RxMagnitudes {
+        let freq_mag: &FourierMagnitude = &self.frequency_magnitude;
+        let start_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.start);
+        let end_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.end);
+        let next_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.next);
+        let high_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.high);
+        let low_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.low);
+
+        let magnitudes: RxMagnitudes = RxMagnitudes::new(
+            start_magnitude,
+            end_magnitude,
+            next_magnitude,
+            high_magnitude,
+            low_magnitude,
+        );
+
+        // print_magnitude(&magnitudes);
+        magnitudes
+    }
+
+    fn get_minimum_chunk_size(&self, frequency: f32, cycles: usize, sample_rate: usize) -> usize {
+        let time_for_one_cycle: f32 = 1.0 / frequency;
+        let chunk_time: f32 = cycles as f32 * time_for_one_cycle;
+        (chunk_time * sample_rate as f32).ceil() as usize
+    }
+
+    fn get_owned_samples_chunk<'a>(
+        &self,
+        samples: &'a [f32],
+        idx: usize,
+        sample_size: usize,
+    ) -> Vec<f32> {
+        let en_idx: usize = idx + sample_size;
+        let en_idx: usize = self.clamp_ending_index(en_idx);
+        let mut samples_chunk: Vec<f32> = samples[idx..en_idx].to_vec();
+        self.re_normalize_samples_chunk(&mut samples_chunk);
+        samples_chunk
+    }
+
+    fn clamp_ending_index(&self, idx: usize) -> usize {
+        if idx > self.buffer.len() {
+            return self.buffer.len();
+        }
+        idx
+    }
+
+    fn normalize_samples(&self, samples: &mut [f32]) {
+        let bit_depth: usize = self.spec.bits_per_sample as usize;
+        let mut normalizer: Normalizer<'_> = Normalizer::new(samples);
+        normalizer.normalize(bit_depth, 0.1);
+    }
+
+    fn re_normalize_samples_chunk(&self, chunk: &mut [f32]) {
+        let mut normalizer: Normalizer<'_> = Normalizer::new(chunk);
+        normalizer.re_normalize(0.1);
+    }
+}
+
 fn print_magnitude(magnitudes: &RxMagnitudes) {
     let mut boolean: bool = false;
 
@@ -331,4 +641,13 @@ fn save_normalized(samples: &[f32], spec: &WavSpec) {
     normalizer.de_normalize(bit_depth);
     let samples: Vec<i32> = normalizer.to_i32();
     save_audio("normalized.wav", &samples, spec);
+}
+
+pub fn save_normalized_name(filename: &str, samples: &[f32], spec: &WavSpec) {
+    let bit_depth: usize = spec.bits_per_sample as usize;
+    let mut samples: Vec<f32> = samples.to_vec();
+    let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);
+    normalizer.de_normalize(bit_depth);
+    let samples: Vec<i32> = normalizer.to_i32();
+    save_audio(filename, &samples, spec);
 }

@@ -48,6 +48,13 @@ impl RxResolver {
         }
         None
     }
+
+    pub fn reset(&mut self) {
+        self.selection = None;
+        self.expectation = RxStates::Start;
+        self.end_selection = None;
+        self.end_expectation = None;
+    }
 }
 
 impl RxResolver {

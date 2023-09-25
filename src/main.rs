@@ -34,7 +34,7 @@ fn get_profile() -> ProtocolProfile {
 fn transmitter() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
-    let string: &str = "Test String";
+    let string = "Test String".repeat(100);
     let data: &[u8] = string.as_bytes();
 
     println!("Data: {:?}", data);
