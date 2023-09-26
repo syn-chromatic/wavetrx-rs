@@ -7,7 +7,7 @@ pub const SAMPLE_SIZE: f32 = (AUDIO_SR as f32 * TONE_LENGTH_US as f32) / 1_000_0
 pub const MIN_FREQ_SEP: f32 = AUDIO_SR as f32 / SAMPLE_SIZE;
 
 pub const LP_FILTER: f32 = 18_000.0;
-pub const HP_FILTER: f32 = 2_000.0;
+pub const HP_FILTER: f32 = 1_000.0;
 
 pub const BIT_FREQUENCY_ON: f32 = 4_000.0;
 pub const BIT_FREQUENCY_OFF: f32 = 4_500.0;
