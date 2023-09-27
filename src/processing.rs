@@ -44,8 +44,8 @@ fn silence_bin(complex_samples: &mut Vec<Complex<f32>>, bin: usize, sample_size:
     if bin > 0 && bin != sample_size {
         complex_samples[bin].re = 0.0;
         complex_samples[bin].im = 0.0;
-        // complex_samples[sample_size - bin].re = 0.0;
-        // complex_samples[sample_size - bin].im = 0.0;
+        complex_samples[sample_size - bin].re = 0.0;
+        complex_samples[sample_size - bin].im = 0.0;
     }
 }
 
