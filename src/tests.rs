@@ -75,7 +75,7 @@ fn test_live_receiver() {
     let (mut samples, spec) = read_file(filename);
     let profile: ProtocolProfile = get_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
-    // let sample_size = live_receiver.get_sample_size();
+    let sample_size = live_receiver.get_sample_size();
     let sample_size: usize = 44;
 
     let mut idx = 0;
@@ -88,7 +88,7 @@ fn test_live_receiver() {
         idx += sample_size;
     }
 
-    // live_receiver.save("live_receiver_output.wav");
+    live_receiver.save("live_receiver_output.wav");
 }
 
 #[test]
