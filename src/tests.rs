@@ -80,8 +80,8 @@ fn test_live_receiver() {
 
     let mut idx = 0;
     while idx + sample_size < samples.len() {
-        // let timestamp = idx as f32 / spec.sample_rate as f32;
-        // println!("Timestamp: {:.3}", timestamp);
+        let timestamp = idx as f32 / spec.sample_rate as f32;
+        println!("Timestamp: {:.3}", timestamp);
         let en_index: usize = idx + sample_size;
         let samples_chunk: &mut [f32] = &mut samples[idx..en_index];
         live_receiver.append_audio_samples(samples_chunk);
