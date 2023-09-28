@@ -88,7 +88,7 @@ fn test_live_receiver() {
         idx += sample_size;
     }
 
-    live_receiver.save("live_receiver_output.wav");
+    // live_receiver.save("live_receiver_output.wav");
 }
 
 #[test]
