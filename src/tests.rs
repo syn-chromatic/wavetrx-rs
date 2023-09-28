@@ -11,7 +11,6 @@ use crate::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
 use crate::rx::spectrum::Normalizer;
 use crate::tx::transmitter::Transmitter;
 use crate::utils::bits_to_string;
-use crate::utils::get_bit_depth_magnitudes;
 
 use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
 use crate::get_profile;
@@ -118,7 +117,6 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
     let recorded_samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
     let recorded_samples_arc: Arc<Mutex<Vec<f32>>> = recorded_samples.clone();
-    let (p_magnitude, n_magnitude) = get_bit_depth_magnitudes(bits_per_sample as usize);
 
     let stream = device.build_input_stream(
         &config.into(),
