@@ -103,6 +103,7 @@ fn test_function() {
     let lowpass_frequency: f32 = 1000.0;
 
     let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(&mut samples, &spec);
+
     // filters.apply_highpass(highpass_frequency, 1.0);
     // filters.apply_lowpass(lowpass_frequency, 0.707);
     filters.apply_bandpass(5000.0, 10_000.0, 1.0);
