@@ -174,15 +174,13 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sample Size: {}", sample_format.sample_size());
     println!("Bits Per Sample: {}", bits_per_sample);
 
-    let spec: SampleSpec = SampleSpec::new(sample_rate, 32, 1, SampleEncoding::Int);
+    let spec: SampleSpec = SampleSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::Int);
 
     let profile: ProtocolProfile = get_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
 
-    let mut recorder = Recorder::new(device, config.into());
+    let mut recorder: Recorder = Recorder::new(device, config.into());
     recorder.record()?;
-
-    std::thread::sleep(std::time::Duration::from_secs(1));
 
     println!("Live Receiver");
 

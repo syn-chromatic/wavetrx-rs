@@ -1,3 +1,3 @@
-mod conversion;
+mod conversions;
 
-pub use conversion::*;
+pub use conversions::*;

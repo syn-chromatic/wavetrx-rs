@@ -9,14 +9,14 @@ use crate::audio::types::SampleSpec;
 use crate::utils::get_bit_depth_magnitudes;
 use crate::utils::save_audio;
 
-pub struct FrequencyFilters<'a> {
+pub struct FrequencyPass<'a> {
     samples: &'a mut [f32],
     spec: &'a SampleSpec,
 }
 
-impl<'a> FrequencyFilters<'a> {
+impl<'a> FrequencyPass<'a> {
     pub fn new(samples: &'a mut [f32], spec: &'a SampleSpec) -> Self {
-        FrequencyFilters { samples, spec }
+        FrequencyPass { samples, spec }
     }
 
     pub fn apply_highpass(&mut self, frequency: f32, q_value: f32) {
@@ -60,7 +60,7 @@ impl<'a> FrequencyFilters<'a> {
     }
 }
 
-impl<'a> FrequencyFilters<'a> {
+impl<'a> FrequencyPass<'a> {
     fn get_coefficients(
         &self,
         filter: Type,
@@ -103,7 +103,7 @@ fn test_function() {
     let highpass_frequency: f32 = 1000.0;
     let lowpass_frequency: f32 = 1000.0;
 
-    let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(&mut samples, &spec);
+    let mut filters: FrequencyPass<'_> = FrequencyPass::new(&mut samples, &spec);
 
     // filters.apply_highpass(highpass_frequency, 1.0);
     // filters.apply_lowpass(lowpass_frequency, 0.707);

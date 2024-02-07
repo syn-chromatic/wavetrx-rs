@@ -8,8 +8,9 @@ use super::resolver::RxResolver;
 use super::spectrum::{FourierMagnitude, Normalizer};
 use super::states::{RxMagnitudes, RxOutput};
 
+use crate::audio::filters::FrequencyPass;
 use crate::audio::types::SampleSpec;
-use crate::filters::FrequencyFilters;
+
 use crate::protocol::profile::ProtocolProfile;
 use crate::utils::{bits_to_string, save_audio};
 
@@ -68,7 +69,7 @@ impl Receiver {
         let highpass_frequency: f32 = HP_FILTER;
         let lowpass_frequency: f32 = LP_FILTER;
 
-        let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(samples, spec);
+        let mut filters: FrequencyPass<'_> = FrequencyPass::new(samples, spec);
         filters.apply_highpass(highpass_frequency, 0.707);
         filters.apply_lowpass(lowpass_frequency, 0.707);
 
@@ -424,7 +425,7 @@ impl LiveReceiver {
         let highpass_frequency: f32 = HP_FILTER;
         let lowpass_frequency: f32 = LP_FILTER;
 
-        let mut filters: FrequencyFilters<'_> = FrequencyFilters::new(samples, &self.spec);
+        let mut filters: FrequencyPass<'_> = FrequencyPass::new(samples, &self.spec);
         filters.apply_highpass(highpass_frequency, 0.707);
         filters.apply_lowpass(lowpass_frequency, 0.707);
     }

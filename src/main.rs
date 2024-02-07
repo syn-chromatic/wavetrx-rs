@@ -1,6 +1,5 @@
 mod audio;
 mod consts;
-mod filters;
 mod impls;
 mod processing;
 mod protocol;
