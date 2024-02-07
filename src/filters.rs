@@ -5,16 +5,17 @@ use biquad::ToHertz;
 use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Type};
 use hound::{WavReader, WavSpec};
 
+use crate::audio::types::SampleSpec;
 use crate::utils::get_bit_depth_magnitudes;
 use crate::utils::save_audio;
 
 pub struct FrequencyFilters<'a> {
     samples: &'a mut [f32],
-    spec: &'a WavSpec,
+    spec: &'a SampleSpec,
 }
 
 impl<'a> FrequencyFilters<'a> {
-    pub fn new(samples: &'a mut [f32], spec: &'a WavSpec) -> Self {
+    pub fn new(samples: &'a mut [f32], spec: &'a SampleSpec) -> Self {
         FrequencyFilters { samples, spec }
     }
 
@@ -66,7 +67,7 @@ impl<'a> FrequencyFilters<'a> {
         frequency: f32,
         q_value: f32,
     ) -> Result<Coefficients<f32>, biquad::Errors> {
-        let fs: Hertz<f32> = self.spec.sample_rate.hz();
+        let fs: Hertz<f32> = self.spec.sample_rate().hz();
         let f0: Hertz<f32> = frequency.hz();
 
         let coefficients: Result<Coefficients<f32>, biquad::Errors> =
@@ -93,8 +94,8 @@ impl<'a> FrequencyFilters<'a> {
 fn test_function() {
     let filename: &str = "sweep_h.wav";
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-    let spec: WavSpec = reader.spec();
-    let format = spec.sample_format;
+    let spec: SampleSpec = reader.spec().into();
+    // let encoding = spec.encoding();
 
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let mut samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();

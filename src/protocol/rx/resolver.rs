@@ -1,4 +1,6 @@
-use crate::rx::states::{RxMagnitudes, RxOutput, RxStates};
+use super::states::RxMagnitudes;
+use super::states::RxOutput;
+use super::states::RxStates;
 
 #[derive(Debug)]
 pub struct RxResolver {

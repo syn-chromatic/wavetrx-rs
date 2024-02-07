@@ -4,12 +4,18 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::StreamConfig;
 use hound::{WavReader, WavSpec};
 
-use crate::protocol::ProtocolProfile;
-use crate::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
-use crate::rx::spectrum::Normalizer;
-use crate::tx::transmitter::Transmitter;
+use crate::audio::recorder::Recorder;
+
+use crate::audio::types::SampleEncoding;
+use crate::audio::types::SampleSpec;
+
+use crate::protocol::profile::ProtocolProfile;
+use crate::protocol::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
+use crate::protocol::rx::spectrum::Normalizer;
+use crate::protocol::tx::transmitter::Transmitter;
 use crate::utils::bits_to_string;
 
 use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
@@ -70,6 +76,7 @@ fn test_live_receiver() {
     let filename: &str = "transmitted_audio.wav";
 
     let (mut samples, spec) = read_file(filename);
+    let spec: SampleSpec = spec.into();
     let profile: ProtocolProfile = get_profile();
 
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
@@ -78,11 +85,11 @@ fn test_live_receiver() {
 
     let mut idx = 0;
     while idx + sample_size < samples.len() {
-        let timestamp = idx as f32 / spec.sample_rate as f32;
+        let timestamp = idx as f32 / spec.sample_rate() as f32;
         // println!("Timestamp: {:.3}", timestamp);
         let en_index: usize = idx + sample_size;
         let samples_chunk: &mut [f32] = &mut samples[idx..en_index];
-        live_receiver.append_audio_samples(samples_chunk);
+        live_receiver.append_sample(samples_chunk);
         idx += sample_size;
     }
 
@@ -104,13 +111,12 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
     let sample_rate = config.sample_rate().0;
     let sample_format = config.sample_format();
     let bits_per_sample = (sample_format.sample_size() * 8) as u16;
+    println!("Channels: {}", channels);
+    println!("Sample Rate: {}", sample_rate);
+    println!("Sample Size: {}", sample_format.sample_size());
+    println!("Bits Per Sample: {}", bits_per_sample);
 
-    let spec = WavSpec {
-        channels: 1,
-        sample_rate: sample_rate,
-        bits_per_sample: 32,
-        sample_format: hound::SampleFormat::Int,
-    };
+    let spec: SampleSpec = SampleSpec::new(sample_rate, 32, 1, SampleEncoding::Int);
 
     let profile: ProtocolProfile = get_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
@@ -120,6 +126,7 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
     let stream = device.build_input_stream(
         &config.into(),
         move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            // println!("Len Data: {}", data.len());
             let mut samples: Vec<f32> = Vec::new();
             for (idx, sample) in data.iter().enumerate() {
                 if idx % 2 == 0 {
@@ -127,7 +134,7 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            live_receiver.append_audio_samples(&mut samples);
+            live_receiver.append_sample(&mut samples);
             // recorded_samples_arc.lock().unwrap().append(&mut samples);
         },
         move |err| {
@@ -137,11 +144,64 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     stream.play()?;
+    println!("PLAYED");
     std::thread::sleep(std::time::Duration::from_secs(180));
 
     // if let Ok(recorded) = recorded_samples.lock().as_deref() {
     //     save_normalized_name("recorded.wav", recorded, &spec);
     // }
+
+    Ok(())
+}
+
+#[test]
+fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
+    let host = cpal::default_host();
+    let device = host
+        .default_input_device()
+        .ok_or("No input device available")?;
+    let config = device.default_input_config()?;
+
+    println!("Default input device: {}", device.name()?);
+    println!("Default input format: {:?}", config);
+
+    let channels: u16 = config.channels();
+    let sample_rate: u32 = config.sample_rate().0;
+    let sample_format = config.sample_format();
+    let bits_per_sample: u16 = (sample_format.sample_size() * 8) as u16;
+    println!("Channels: {}", channels);
+    println!("Sample Rate: {}", sample_rate);
+    println!("Sample Size: {}", sample_format.sample_size());
+    println!("Bits Per Sample: {}", bits_per_sample);
+
+    let spec: SampleSpec = SampleSpec::new(sample_rate, 32, 1, SampleEncoding::Int);
+
+    let profile: ProtocolProfile = get_profile();
+    let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
+
+    let mut recorder = Recorder::new(device, config.into());
+    recorder.record()?;
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    println!("Live Receiver");
+
+    loop {
+        if let Some(sample) = recorder.take_sample() {
+            // println!("Samples: {}", sample.len());
+            let mut sc_sample: Vec<f32> = Vec::new();
+            for (idx, sample) in sample.iter().enumerate() {
+                if idx % 2 == 0 {
+                    sc_sample.push(*sample);
+                }
+            }
+
+            live_receiver.append_sample(&mut sc_sample);
+        }
+    }
+
+    // println!("Done");
+    // std::thread::sleep(std::time::Duration::from_secs(180));
 
     Ok(())
 }

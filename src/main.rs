@@ -1,16 +1,15 @@
+mod audio;
 mod consts;
 mod filters;
 mod impls;
 mod processing;
 mod protocol;
-mod rx;
 mod tests;
-mod tx;
 mod utils;
 
-use crate::protocol::ProtocolProfile;
-use crate::rx::receiver::Receiver;
-use crate::tx::transmitter::Transmitter;
+use crate::protocol::profile::ProtocolProfile;
+use crate::protocol::rx::receiver::Receiver;
+use crate::protocol::tx::transmitter::Transmitter;
 use crate::utils::bits_to_string;
 
 use crate::consts::{
@@ -35,7 +34,7 @@ fn get_profile() -> ProtocolProfile {
 fn transmitter() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
-    let string = "Test String".repeat(50);
+    let string = "Test String".repeat(2);
     let data: &[u8] = string.as_bytes();
 
     println!("Data: {:?}", data);

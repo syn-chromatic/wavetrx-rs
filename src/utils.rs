@@ -2,6 +2,8 @@ use hound::{WavSpec, WavWriter};
 use std::fs::File;
 use std::io::BufWriter;
 
+use crate::audio::types::SampleSpec;
+
 pub trait Scalar {
     fn to_i32(&self) -> i32;
 }
@@ -40,9 +42,22 @@ impl IntoBitDepth for &WavSpec {
     }
 }
 
-pub fn save_audio<T: Scalar>(filename: &str, samples: &[T], spec: &WavSpec) {
+impl IntoBitDepth for SampleSpec {
+    fn into_bit_depth(self) -> u32 {
+        self.bits_per_sample() as u32
+    }
+}
+
+impl IntoBitDepth for &SampleSpec {
+    fn into_bit_depth(self) -> u32 {
+        self.bits_per_sample() as u32
+    }
+}
+
+pub fn save_audio<T: Scalar>(filename: &str, samples: &[T], spec: &SampleSpec) {
+    let wav_spec: WavSpec = (*spec).into();
     let mut writer: WavWriter<BufWriter<File>> =
-        WavWriter::create(filename, spec.clone()).expect("Error creating WAV writer");
+        WavWriter::create(filename, wav_spec).expect("Error creating WAV writer");
 
     for sample in samples {
         writer

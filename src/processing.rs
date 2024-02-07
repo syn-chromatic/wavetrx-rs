@@ -7,7 +7,10 @@ use rustfft::FftPlanner;
 
 use hound::{WavReader, WavSpec};
 
-use crate::rx::spectrum::FourierMagnitude;
+use crate::audio::types::SampleEncoding;
+use crate::audio::types::SampleSpec;
+
+use crate::protocol::rx::spectrum::FourierMagnitude;
 use crate::utils::save_audio;
 use crate::{
     BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, TONE_LENGTH_US,
@@ -91,10 +94,10 @@ fn test_func() {
     let filename = "test5.wav";
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-    let spec: WavSpec = reader.spec();
-    let audio_bps: usize = spec.bits_per_sample as usize;
+    let spec: SampleSpec = reader.spec().into();
+    let audio_bps: usize = spec.bits_per_sample() as usize;
     let max_magnitude: f32 = ((2i32.pow(audio_bps as u32 - 1)) - 1) as f32;
-    let sample_rate = spec.sample_rate as usize;
+    let sample_rate = spec.sample_rate() as usize;
     println!("Max Magnitude: {}", max_magnitude);
 
     let sample_size: usize = (sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
@@ -103,7 +106,7 @@ fn test_func() {
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let mut samples: Vec<f32> = samples.iter().map(|&sample| sample as f32 - 1.0).collect();
     println!("Samples: {}", samples.len());
-    let fft_magnitude = FourierMagnitude::new(sample_size, spec);
+    let fft_magnitude = FourierMagnitude::new(sample_size, &spec);
 
     print_samples(&samples);
 

@@ -1,6 +1,3 @@
-mod audio;
-mod profile;
-
-pub use profile::ProtocolProfile;
-pub use audio::SampleEncoding;
-pub use audio::SampleSpec;
+pub mod profile;
+pub mod rx;
+pub mod tx;

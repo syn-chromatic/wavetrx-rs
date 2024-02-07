@@ -4,6 +4,7 @@ pub enum SampleEncoding {
     Int,
 }
 
+#[derive(Clone, Copy)]
 pub struct SampleSpec {
     sr: u32,
     bps: u16,

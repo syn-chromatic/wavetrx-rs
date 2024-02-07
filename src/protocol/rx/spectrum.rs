@@ -7,6 +7,9 @@ use rustfft::num_complex::Complex;
 use rustfft::Fft;
 use rustfft::FftPlanner;
 
+use crate::audio::types::SampleEncoding;
+use crate::audio::types::SampleSpec;
+
 use crate::utils::get_bit_depth_magnitudes;
 
 pub struct FourierMagnitude {
@@ -16,10 +19,10 @@ pub struct FourierMagnitude {
 }
 
 impl FourierMagnitude {
-    pub fn new(sample_size: usize, spec: WavSpec) -> Self {
+    pub fn new(sample_size: usize, spec: &SampleSpec) -> Self {
         let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
         let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(sample_size);
-        let sample_rate: usize = spec.sample_rate as usize;
+        let sample_rate: usize = spec.sample_rate() as usize;
 
         FourierMagnitude {
             fft,

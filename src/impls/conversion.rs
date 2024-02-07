@@ -1,8 +1,8 @@
 use hound::SampleFormat;
 use hound::WavSpec;
 
-use crate::protocol::SampleEncoding;
-use crate::protocol::SampleSpec;
+use crate::audio::types::SampleEncoding;
+use crate::audio::types::SampleSpec;
 
 impl From<WavSpec> for SampleSpec {
     fn from(value: WavSpec) -> Self {
