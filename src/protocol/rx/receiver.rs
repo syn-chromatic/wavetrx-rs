@@ -13,6 +13,7 @@ use crate::audio::types::SampleSpec;
 use crate::audio::utils::save_audio;
 
 use crate::protocol::profile::ProtocolProfile;
+use crate::protocol::profile::PulseDuration;
 use crate::protocol::utils::bits_to_string;
 
 use crate::consts::{DB_THRESHOLD, HP_FILTER, LP_FILTER};
@@ -94,11 +95,11 @@ impl Receiver {
 
         while idx < (samples.len() - sample_size) {
             let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
-            let magnitude: f32 = freq_mag.get_magnitude(&samples_chunk, self.profile.start);
+            let start_magnitude = self.get_start_magnitude(&samples_chunk, freq_mag);
 
             let terminate: bool = self.update_starting_index_search(
                 idx,
-                magnitude,
+                start_magnitude,
                 &mut current_best_idx,
                 &mut current_best_magnitude,
                 &mut consecutive_fails,
@@ -115,7 +116,7 @@ impl Receiver {
     fn update_starting_index_search(
         &self,
         idx: usize,
-        magnitude: f32,
+        start_magnitude: f32,
         current_best_idx: &mut Option<usize>,
         current_best_magnitude: &mut Option<f32>,
         consecutive_fails: &mut usize,
@@ -123,10 +124,10 @@ impl Receiver {
     ) -> bool {
         match current_best_magnitude {
             Some(previous_best_magnitude) => {
-                if magnitude >= *previous_best_magnitude && magnitude <= DB_THRESHOLD {
+                if start_magnitude >= *previous_best_magnitude && start_magnitude <= DB_THRESHOLD {
                     *consecutive_fails = 0;
                     *current_best_idx = Some(idx);
-                    *current_best_magnitude = Some(magnitude);
+                    *current_best_magnitude = Some(start_magnitude);
                 } else {
                     if *consecutive_fails == max_consecutive_fails {
                         return true;
@@ -135,9 +136,9 @@ impl Receiver {
                 }
             }
             None => {
-                if magnitude >= -DB_THRESHOLD && magnitude <= DB_THRESHOLD {
+                if start_magnitude >= -DB_THRESHOLD && start_magnitude <= DB_THRESHOLD {
                     *current_best_idx = Some(idx);
-                    *current_best_magnitude = Some(magnitude);
+                    *current_best_magnitude = Some(start_magnitude);
                 }
             }
         }
@@ -152,7 +153,7 @@ impl Receiver {
         current_best_magnitude: &Option<f32>,
     ) {
         if current_best_magnitude.is_none() {
-            let frequency: f32 = self.profile.start;
+            let frequency: f32 = self.profile.markers.start.hz();
             let idx_skip: usize = self.get_minimum_chunk_size(frequency, cycles, sample_rate);
             *idx += idx_skip;
         } else {
@@ -201,23 +202,57 @@ impl Receiver {
     }
 
     fn get_tone_sample_size(&self, spec: &SampleSpec) -> usize {
+        let tone_pulse: &PulseDuration = &self.profile.pulses.tone;
+
         let sample_rate: usize = spec.sample_rate() as usize;
-        let tone_sample_size: usize = (sample_rate * self.profile.tone_length) as usize / 1_000_000;
-        tone_sample_size
+        let sample_size: usize = tone_pulse.sample_size::<usize>(sample_rate);
+        sample_size
     }
 
     fn get_gap_sample_size(&self, spec: &SampleSpec) -> usize {
+        let gap_pulse: &PulseDuration = &self.profile.pulses.gap;
+
         let sample_rate: usize = spec.sample_rate() as usize;
-        let gap_sample_size: usize = (sample_rate * self.profile.gap_length) as usize / 1_000_000;
-        gap_sample_size
+        let sample_size: usize = gap_pulse.sample_size::<usize>(sample_rate);
+        sample_size
+    }
+
+    fn get_start_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.markers.start.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_end_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.markers.end.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_next_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.markers.next.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_high_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.bits.high.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_low_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.bits.low.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
     }
 
     fn get_magnitudes(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> RxMagnitudes {
-        let start_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.start);
-        let end_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.end);
-        let next_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.next);
-        let high_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.high);
-        let low_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.low);
+        let start_magnitude: f32 = self.get_start_magnitude(samples, freq_mag);
+        let end_magnitude: f32 = self.get_end_magnitude(samples, freq_mag);
+        let next_magnitude: f32 = self.get_next_magnitude(samples, freq_mag);
+        let high_magnitude: f32 = self.get_high_magnitude(samples, freq_mag);
+        let low_magnitude: f32 = self.get_low_magnitude(samples, freq_mag);
 
         let magnitudes: RxMagnitudes = RxMagnitudes::new(
             start_magnitude,
@@ -310,7 +345,7 @@ impl LiveReceiver {
         let bits: Vec<u8> = Vec::new();
         let resolver: RxResolver = RxResolver::new();
         let sample_rate: usize = spec.sample_rate() as usize;
-        let sample_size: usize = (sample_rate * profile.tone_length) as usize / 1_000_000;
+        let sample_size: usize = profile.pulses.tone.sample_size::<usize>(sample_rate);
         let frequency_magnitude: FourierMagnitude = FourierMagnitude::new(sample_size, &spec);
         let start_idx: Option<usize> = None;
         let start_signal: bool = false;
@@ -447,11 +482,11 @@ impl LiveReceiver {
 
         while idx < (samples.len() - sample_size) {
             let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
-            let magnitude: f32 = freq_mag.get_magnitude(&samples_chunk, self.profile.start);
+            let start_magnitude: f32 = self.get_start_magnitude(&samples_chunk, freq_mag);
 
             let terminate: bool = self.update_starting_index_search(
                 idx,
-                magnitude,
+                start_magnitude,
                 &mut current_best_idx,
                 &mut current_best_magnitude,
                 &mut consecutive_fails,
@@ -468,7 +503,7 @@ impl LiveReceiver {
     fn update_starting_index_search(
         &self,
         idx: usize,
-        magnitude: f32,
+        start_magnitude: f32,
         current_best_idx: &mut Option<usize>,
         current_best_magnitude: &mut Option<f32>,
         consecutive_fails: &mut usize,
@@ -476,10 +511,10 @@ impl LiveReceiver {
     ) -> bool {
         match current_best_magnitude {
             Some(previous_best_magnitude) => {
-                if magnitude >= *previous_best_magnitude && magnitude <= DB_THRESHOLD {
+                if start_magnitude >= *previous_best_magnitude && start_magnitude <= DB_THRESHOLD {
                     *consecutive_fails = 0;
                     *current_best_idx = Some(idx);
-                    *current_best_magnitude = Some(magnitude);
+                    *current_best_magnitude = Some(start_magnitude);
                 } else {
                     if *consecutive_fails == max_consecutive_fails {
                         return true;
@@ -488,9 +523,9 @@ impl LiveReceiver {
                 }
             }
             None => {
-                if magnitude >= -DB_THRESHOLD && magnitude <= DB_THRESHOLD {
+                if start_magnitude >= -DB_THRESHOLD && start_magnitude <= DB_THRESHOLD {
                     *current_best_idx = Some(idx);
-                    *current_best_magnitude = Some(magnitude);
+                    *current_best_magnitude = Some(start_magnitude);
                 }
             }
         }
@@ -505,7 +540,7 @@ impl LiveReceiver {
         current_best_magnitude: &Option<f32>,
     ) {
         if current_best_magnitude.is_none() {
-            let frequency: f32 = self.profile.start;
+            let frequency: f32 = self.profile.markers.start.hz();
             let idx_skip: usize = self.get_minimum_chunk_size(frequency, cycles, sample_rate);
             *idx += idx_skip;
         } else {
@@ -530,24 +565,57 @@ impl LiveReceiver {
     }
 
     fn get_tone_sample_size(&self) -> usize {
+        let tone_pulse: &PulseDuration = &self.profile.pulses.tone;
+
         let sample_rate: usize = self.spec.sample_rate() as usize;
-        let tone_sample_size: usize = (sample_rate * self.profile.tone_length) as usize / 1_000_000;
-        tone_sample_size
+        let sample_size: usize = tone_pulse.sample_size::<usize>(sample_rate);
+        sample_size
     }
 
     fn get_gap_sample_size(&self) -> usize {
+        let gap_pulse: &PulseDuration = &self.profile.pulses.gap;
+
         let sample_rate: usize = self.spec.sample_rate() as usize;
-        let gap_sample_size: usize = (sample_rate * self.profile.gap_length) as usize / 1_000_000;
-        gap_sample_size
+        let sample_size: usize = gap_pulse.sample_size::<usize>(sample_rate);
+        sample_size
+    }
+
+    fn get_start_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.markers.start.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_end_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.markers.end.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_next_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.markers.next.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_high_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.bits.high.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
+    }
+
+    fn get_low_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+        let frequency: f32 = self.profile.bits.low.hz();
+        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        magnitude
     }
 
     fn get_magnitudes(&self, samples: &[f32]) -> RxMagnitudes {
-        let freq_mag: &FourierMagnitude = &self.frequency_magnitude;
-        let start_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.start);
-        let end_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.end);
-        let next_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.next);
-        let high_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.high);
-        let low_magnitude: f32 = freq_mag.get_magnitude(samples, self.profile.low);
+        let start_magnitude: f32 = self.get_start_magnitude(samples, &self.frequency_magnitude);
+        let end_magnitude: f32 = self.get_end_magnitude(samples, &self.frequency_magnitude);
+        let next_magnitude: f32 = self.get_next_magnitude(samples, &self.frequency_magnitude);
+        let high_magnitude: f32 = self.get_high_magnitude(samples, &self.frequency_magnitude);
+        let low_magnitude: f32 = self.get_low_magnitude(samples, &self.frequency_magnitude);
 
         let magnitudes: RxMagnitudes = RxMagnitudes::new(
             start_magnitude,

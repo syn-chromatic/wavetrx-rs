@@ -4,27 +4,28 @@ mod processing;
 mod protocol;
 mod tests;
 
+use std::time::Duration;
+
+use crate::protocol::profile::Bits;
+use crate::protocol::profile::Markers;
 use crate::protocol::profile::ProtocolProfile;
+use crate::protocol::profile::Pulses;
+
 use crate::protocol::rx::receiver::Receiver;
 use crate::protocol::tx::transmitter::Transmitter;
 use crate::protocol::utils::bits_to_string;
 
 use crate::consts::{
-    AUDIO_BPS, AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, MIN_FREQ_SEP,
-    TONE_GAP_US, TONE_LENGTH_US, TRANSMIT_END_FREQUENCY, TRANSMIT_START_FREQUENCY,
+    AUDIO_BPS, AUDIO_SR, BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT,
+    MARKER_TONE_START, MIN_FREQ_SEP, PULSE_GAP_US, PULSE_LENGTH_US,
 };
 
 fn get_profile() -> ProtocolProfile {
-    let start: f32 = TRANSMIT_START_FREQUENCY;
-    let end: f32 = TRANSMIT_END_FREQUENCY;
-    let next: f32 = BIT_FREQUENCY_NEXT;
-    let high: f32 = BIT_FREQUENCY_ON;
-    let low: f32 = BIT_FREQUENCY_OFF;
-    let tone_length: usize = TONE_LENGTH_US;
-    let gap_length: usize = TONE_GAP_US;
+    let markers: Markers = Markers::new(MARKER_TONE_START, MARKER_TONE_END, MARKER_TONE_NEXT);
+    let bits: Bits = Bits::new(BIT_TONE_HIGH, BIT_TONE_LOW);
+    let pulses: Pulses = Pulses::new(PULSE_LENGTH_US, PULSE_GAP_US);
 
-    let profile: ProtocolProfile =
-        ProtocolProfile::new(start, end, next, high, low, tone_length, gap_length);
+    let profile: ProtocolProfile = ProtocolProfile::new(markers, bits, pulses);
     profile
 }
 

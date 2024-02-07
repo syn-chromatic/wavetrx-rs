@@ -177,32 +177,32 @@ impl Transmitter {
     }
 
     fn append_start(&self, tone: &mut ToneGenerator, fade_ratio: f32) -> Result<(), hound::Error> {
-        let tone_length: usize = self.profile.tone_length;
-        let gap_length: usize = self.profile.gap_length;
-        let frequency: f32 = self.profile.start;
+        let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
+        let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
+        let frequency: f32 = self.profile.markers.start.hz();
 
-        tone.append_sine_faded_tone(frequency, tone_length, fade_ratio)?;
-        tone.append_tone(0.0, gap_length)?;
+        tone.append_sine_faded_tone(frequency, tone_duration, fade_ratio)?;
+        tone.append_tone(0.0, gap_duration)?;
         Ok(())
     }
 
     fn append_end(&self, tone: &mut ToneGenerator, fade_ratio: f32) -> Result<(), hound::Error> {
-        let tone_length: usize = self.profile.tone_length;
-        let gap_length: usize = self.profile.gap_length;
-        let frequency: f32 = self.profile.end;
+        let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
+        let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
+        let frequency: f32 = self.profile.markers.end.hz();
 
-        tone.append_sine_faded_tone(frequency, tone_length, fade_ratio)?;
-        tone.append_tone(0.0, gap_length)?;
+        tone.append_sine_faded_tone(frequency, tone_duration, fade_ratio)?;
+        tone.append_tone(0.0, gap_duration)?;
         Ok(())
     }
 
     fn append_next(&self, tone: &mut ToneGenerator, fade_ratio: f32) -> Result<(), hound::Error> {
-        let tone_length: usize = self.profile.tone_length;
-        let gap_length: usize = self.profile.gap_length;
-        let frequency: f32 = self.profile.next;
+        let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
+        let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
+        let frequency: f32 = self.profile.markers.next.hz();
 
-        tone.append_sine_faded_tone(frequency, tone_length, fade_ratio)?;
-        tone.append_tone(0.0, gap_length)?;
+        tone.append_sine_faded_tone(frequency, tone_duration, fade_ratio)?;
+        tone.append_tone(0.0, gap_duration)?;
         Ok(())
     }
 
@@ -212,19 +212,12 @@ impl Transmitter {
         bit: bool,
         fade_ratio: f32,
     ) -> Result<(), hound::Error> {
-        let frequency: f32 = self.get_frequency_bit(bit);
-        let tone_length: usize = self.profile.tone_length;
-        let gap_length: usize = self.profile.gap_length;
+        let frequency: f32 = self.profile.bits.from_boolean(bit).hz();
+        let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
+        let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
 
-        tone.append_sine_faded_tone(frequency, tone_length, fade_ratio)?;
-        tone.append_tone(0.0, gap_length)?;
+        tone.append_sine_faded_tone(frequency, tone_duration, fade_ratio)?;
+        tone.append_tone(0.0, gap_duration)?;
         Ok(())
-    }
-
-    fn get_frequency_bit(&self, bit: bool) -> f32 {
-        if bit {
-            return self.profile.high;
-        }
-        self.profile.low
     }
 }

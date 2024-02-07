@@ -13,8 +13,8 @@ use crate::audio::utils::save_audio;
 
 use crate::protocol::rx::spectrum::FourierMagnitude;
 use crate::{
-    BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, TONE_LENGTH_US,
-    TRANSMIT_END_FREQUENCY, TRANSMIT_START_FREQUENCY,
+    BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT, MARKER_TONE_START,
+    PULSE_LENGTH_US,
 };
 
 fn print_samples(samples: &[f32]) {
@@ -100,7 +100,8 @@ fn test_func() {
     let sample_rate = spec.sample_rate() as usize;
     println!("Max Magnitude: {}", max_magnitude);
 
-    let sample_size: usize = (sample_rate * TONE_LENGTH_US) as usize / 1_000_000;
+    let sample_size: usize =
+        (sample_rate as u128 * PULSE_LENGTH_US.as_micros()) as usize / 1_000_000;
     println!("Sample Size: {}", sample_size);
 
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
@@ -123,11 +124,11 @@ fn test_func() {
         fft_forward.process(&mut complex_samples);
 
         let frequencies: Vec<f32> = vec![
-            BIT_FREQUENCY_ON,
-            BIT_FREQUENCY_OFF,
-            BIT_FREQUENCY_NEXT,
-            TRANSMIT_START_FREQUENCY,
-            TRANSMIT_END_FREQUENCY,
+            BIT_TONE_HIGH,
+            BIT_TONE_LOW,
+            MARKER_TONE_NEXT,
+            MARKER_TONE_START,
+            MARKER_TONE_END,
         ];
 
         for frequency in frequencies.iter() {
