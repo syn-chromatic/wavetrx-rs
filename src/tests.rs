@@ -19,7 +19,7 @@ use crate::get_profile;
 fn test_transmitter() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
-    let string: &str = "Hello there!";
+    let string: String = "Test String".repeat(100);
     let data: &[u8] = string.as_bytes();
 
     println!("Data: {:?}", data);
@@ -42,7 +42,7 @@ fn test_transmitter() {
 #[test]
 fn test_receiver() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
-    let filename: &str = "test8.wav";
+    let filename: &str = "transmitted_audio.wav";
 
     let profile: ProtocolProfile = get_profile();
     let receiver: Receiver = Receiver::new(profile);
@@ -67,10 +67,11 @@ fn test_receiver() {
 #[test]
 fn test_live_receiver() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
-    let filename: &str = "live_transmit_test.wav";
+    let filename: &str = "transmitted_audio.wav";
 
     let (mut samples, spec) = read_file(filename);
     let profile: ProtocolProfile = get_profile();
+
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
     let sample_size = live_receiver.get_sample_size();
     let sample_size: usize = 44;
@@ -78,7 +79,7 @@ fn test_live_receiver() {
     let mut idx = 0;
     while idx + sample_size < samples.len() {
         let timestamp = idx as f32 / spec.sample_rate as f32;
-        println!("Timestamp: {:.3}", timestamp);
+        // println!("Timestamp: {:.3}", timestamp);
         let en_index: usize = idx + sample_size;
         let samples_chunk: &mut [f32] = &mut samples[idx..en_index];
         live_receiver.append_audio_samples(samples_chunk);

@@ -1,5 +1,6 @@
 mod consts;
 mod filters;
+mod impls;
 mod processing;
 mod protocol;
 mod rx;
@@ -34,7 +35,7 @@ fn get_profile() -> ProtocolProfile {
 fn transmitter() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let filename: &str = "transmitted_audio.wav";
-    let string = "Test String".repeat(100);
+    let string = "Test String".repeat(50);
     let data: &[u8] = string.as_bytes();
 
     println!("Data: {:?}", data);
