@@ -1,15 +1,13 @@
 mod audio;
 mod consts;
-mod impls;
 mod processing;
 mod protocol;
 mod tests;
-mod utils;
 
 use crate::protocol::profile::ProtocolProfile;
 use crate::protocol::rx::receiver::Receiver;
 use crate::protocol::tx::transmitter::Transmitter;
-use crate::utils::bits_to_string;
+use crate::protocol::utils::bits_to_string;
 
 use crate::consts::{
     AUDIO_BPS, AUDIO_SR, BIT_FREQUENCY_NEXT, BIT_FREQUENCY_OFF, BIT_FREQUENCY_ON, MIN_FREQ_SEP,

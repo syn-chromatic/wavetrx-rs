@@ -5,9 +5,9 @@ use biquad::ToHertz;
 use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Type};
 use hound::{WavReader, WavSpec};
 
-use crate::audio::types::SampleSpec;
-use crate::utils::get_bit_depth_magnitudes;
-use crate::utils::save_audio;
+use super::types::SampleSpec;
+use super::utils::get_bit_depth_magnitudes;
+use super::utils::save_audio;
 
 pub struct FrequencyPass<'a> {
     samples: &'a mut [f32],

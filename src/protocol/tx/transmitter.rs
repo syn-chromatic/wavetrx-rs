@@ -5,8 +5,8 @@ use std::io::BufWriter;
 use hound;
 use hound::{SampleFormat, WavSpec, WavWriter};
 
+use crate::audio::utils::get_bit_depth_magnitudes;
 use crate::protocol::profile::ProtocolProfile;
-use crate::utils::get_bit_depth_magnitudes;
 
 pub struct ToneGenerator {
     writer: WavWriter<BufWriter<File>>,

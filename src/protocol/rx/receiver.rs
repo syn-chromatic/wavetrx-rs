@@ -10,9 +10,10 @@ use super::states::{RxMagnitudes, RxOutput};
 
 use crate::audio::filters::FrequencyPass;
 use crate::audio::types::SampleSpec;
+use crate::audio::utils::save_audio;
 
 use crate::protocol::profile::ProtocolProfile;
-use crate::utils::{bits_to_string, save_audio};
+use crate::protocol::utils::bits_to_string;
 
 use crate::consts::{DB_THRESHOLD, HP_FILTER, LP_FILTER};
 

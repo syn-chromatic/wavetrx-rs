@@ -16,7 +16,7 @@ use crate::protocol::profile::ProtocolProfile;
 use crate::protocol::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
 use crate::protocol::rx::spectrum::Normalizer;
 use crate::protocol::tx::transmitter::Transmitter;
-use crate::utils::bits_to_string;
+use crate::protocol::utils::bits_to_string;
 
 use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
 use crate::get_profile;
