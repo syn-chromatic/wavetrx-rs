@@ -10,18 +10,18 @@ use cpal::Stream;
 use cpal::StreamConfig;
 use cpal::StreamError;
 
-use super::types::Buffer;
+use super::types::FrameBuffer;
 
 pub struct Recorder {
     device: Device,
     config: StreamConfig,
-    buffer: Arc<Buffer>,
+    buffer: Arc<FrameBuffer>,
     stream: Option<Stream>,
 }
 
 impl Recorder {
     pub fn new(device: Device, config: StreamConfig) -> Self {
-        let buffer: Arc<Buffer> = Buffer::new();
+        let buffer: Arc<FrameBuffer> = FrameBuffer::new();
         let stream: Option<Stream> = None;
         Self {
             device,
@@ -44,7 +44,7 @@ impl Recorder {
 }
 
 impl Recorder {
-    fn data_callback(buffer: Arc<Buffer>) -> impl Fn(&[f32], &InputCallbackInfo) {
+    fn data_callback(buffer: Arc<FrameBuffer>) -> impl Fn(&[f32], &InputCallbackInfo) {
         let callback = move |data: &[f32], info: &InputCallbackInfo| {
             let data: Vec<f32> = data.to_vec();
             buffer.add(data);

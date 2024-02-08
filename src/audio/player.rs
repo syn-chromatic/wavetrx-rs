@@ -10,18 +10,18 @@ use cpal::Stream;
 use cpal::StreamConfig;
 use cpal::StreamError;
 
-use super::types::Buffer;
+use super::types::SampleBuffer;
 
 pub struct Player {
     device: Device,
     config: StreamConfig,
-    buffer: Arc<Buffer>,
+    buffer: Arc<SampleBuffer<256>>,
     stream: Option<Stream>,
 }
 
 impl Player {
     pub fn new(device: Device, config: StreamConfig) -> Self {
-        let buffer: Arc<Buffer> = Buffer::new();
+        let buffer: Arc<SampleBuffer<256>> = SampleBuffer::new();
         let stream: Option<Stream> = None;
         Self {
             device,
@@ -38,32 +38,20 @@ impl Player {
         Ok(())
     }
 
-    pub fn add_sample(&self, sample: Vec<f32>) {
+    pub fn add_sample(&self, sample: f32) {
         self.buffer.add(sample);
     }
 }
 
 impl Player {
-    fn data_callback(buffer: Arc<Buffer>) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
+    fn data_callback(buffer: Arc<SampleBuffer<256>>) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
         let callback = move |data: &mut [f32], info: &OutputCallbackInfo| {
-            if let Some(sample) = buffer.take() {
-                if sample.len() == (data.len() / 2) {
-                    for (d, s) in data.iter_mut().step_by(2).zip(sample.iter().step_by(2)) {
-                        *d = *s;
-                    }
-                } else if sample.len() == data.len() {
-                    for (d, s) in data.iter_mut().zip(sample.iter()) {
-                        *d = *s;
-                    }
-                } else {
-                    panic!(
-                        "Buffer Size ({}) doesn't match Output Buffer ({})",
-                        sample.len(),
-                        data.len()
-                    );
+            let mut count: usize = 0;
+            while count < data.len() {
+                if let Some(sample) = buffer.take() {
+                    data[count] = sample;
+                    count += 1;
                 }
-
-                // data.copy_from_slice(&sample);
             }
         };
         callback

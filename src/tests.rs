@@ -228,11 +228,11 @@ fn test_player() -> Result<(), Box<dyn std::error::Error>> {
     let mut player: Player = Player::new(device, config.into());
     player.play()?;
 
-    let filename: &str = "music_mono.wav";
+    let filename: &str = "music.wav";
     let (samples, spec) = read_wav_file(filename);
 
-    for sample in samples.chunks_exact(960) {
-        player.add_sample(sample.to_vec());
+    for sample in samples {
+        player.add_sample(sample);
     }
 
     println!("Done!");
