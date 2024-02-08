@@ -7,6 +7,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::StreamConfig;
 use hound::{WavReader, WavSpec};
 
+use crate::audio::player::Player;
 use crate::audio::recorder::Recorder;
 
 use crate::audio::types::SampleEncoding;
@@ -204,10 +205,57 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn test_player() -> Result<(), Box<dyn std::error::Error>> {
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or("No output device available")?;
+    let config = device.default_output_config()?;
+
+    println!("Default output device: {}", device.name()?);
+    println!("Default output format: {:?}", config);
+
+    let channels: u16 = config.channels();
+    let sample_rate: u32 = config.sample_rate().0;
+    let sample_format = config.sample_format();
+    let bits_per_sample: u16 = (sample_format.sample_size() * 8) as u16;
+    println!("Channels: {}", channels);
+    println!("Sample Rate: {}", sample_rate);
+    println!("Sample Size: {}", sample_format.sample_size());
+    println!("Bits Per Sample: {}", bits_per_sample);
+
+    let mut player: Player = Player::new(device, config.into());
+    player.play()?;
+
+    let filename: &str = "music_mono.wav";
+    let (samples, spec) = read_wav_file(filename);
+
+    for sample in samples.chunks_exact(960) {
+        player.add_sample(sample.to_vec());
+    }
+
+    println!("Done!");
+    std::thread::sleep(std::time::Duration::from_secs(180));
+
+    Ok(())
+}
+
 fn read_file(filename: &str) -> (Vec<f32>, WavSpec) {
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
+    let spec: WavSpec = reader.spec();
+    (samples, spec)
+}
+
+fn read_wav_file(file_path: &str) -> (Vec<f32>, WavSpec) {
+    let mut reader: WavReader<BufReader<File>> = hound::WavReader::open(file_path).unwrap();
+    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    let samples: Vec<f32> = samples
+        .iter()
+        .map(|&s| (s as f32) / (i32::MAX as f32))
+        .collect();
     let spec: WavSpec = reader.spec();
     (samples, spec)
 }
