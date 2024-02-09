@@ -10,22 +10,26 @@ use cpal::Stream;
 use cpal::StreamConfig;
 use cpal::StreamError;
 
+use super::types::AudioSpec;
 use super::types::SampleBuffer;
 
-pub struct Player {
+pub struct OutputPlayer {
     device: Device,
     config: StreamConfig,
-    buffer: Arc<SampleBuffer<256>>,
+    spec: Arc<AudioSpec>,
+    buffer: Arc<SampleBuffer>,
     stream: Option<Stream>,
 }
 
-impl Player {
-    pub fn new(device: Device, config: StreamConfig) -> Self {
-        let buffer: Arc<SampleBuffer<256>> = SampleBuffer::new();
+impl OutputPlayer {
+    pub fn new(device: Device, config: StreamConfig, spec: AudioSpec) -> Self {
+        let buffer: Arc<SampleBuffer> = SampleBuffer::new();
+        let spec: Arc<AudioSpec> = Arc::new(spec);
         let stream: Option<Stream> = None;
         Self {
             device,
             config,
+            spec,
             buffer,
             stream,
         }
@@ -43,17 +47,41 @@ impl Player {
     }
 }
 
-impl Player {
-    fn data_callback(buffer: Arc<SampleBuffer<256>>) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
+impl OutputPlayer {
+    fn append_mono(data: &mut [f32], buffer: &Arc<SampleBuffer>) {
+        let mut count: usize = 0;
+        while count < data.len() {
+            if let Some(sample) = buffer.take() {
+                data[count] = sample;
+                data[count + 1] = sample;
+                count += 2;
+            }
+        }
+    }
+
+    fn append_stereo(data: &mut [f32], buffer: &Arc<SampleBuffer>) {
+        let mut count: usize = 0;
+        while count < data.len() {
+            if let Some(sample) = buffer.take() {
+                data[count] = sample;
+                count += 1;
+            }
+        }
+    }
+
+    fn data_callback(
+        buffer: Arc<SampleBuffer>,
+        spec: Arc<AudioSpec>,
+    ) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
         let callback = move |data: &mut [f32], info: &OutputCallbackInfo| {
-            let mut count: usize = 0;
-            while count < data.len() {
-                if let Some(sample) = buffer.take() {
-                    data[count] = sample;
-                    count += 1;
-                }
+            //
+            match spec.channels() {
+                1 => Self::append_mono(data, &buffer),
+                2 => Self::append_stereo(data, &buffer),
+                _ => {}
             }
         };
+
         callback
     }
 
@@ -64,7 +92,7 @@ impl Player {
     fn build_output_stream(&mut self) -> Result<Stream, BuildStreamError> {
         let stream: Stream = self.device.build_output_stream(
             &self.config,
-            Self::data_callback(self.buffer.clone()),
+            Self::data_callback(self.buffer.clone(), self.spec.clone()),
             Self::error_callback,
             None,
         )?;

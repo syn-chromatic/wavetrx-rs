@@ -2,22 +2,22 @@ use hound::SampleFormat;
 use hound::WavSpec;
 
 use crate::audio::types::SampleEncoding;
-use crate::audio::types::SampleSpec;
+use crate::audio::types::AudioSpec;
 
-impl From<WavSpec> for SampleSpec {
+impl From<WavSpec> for AudioSpec {
     fn from(value: WavSpec) -> Self {
         let sr: u32 = value.sample_rate;
         let bps: u16 = value.bits_per_sample;
         let channels: u16 = value.channels;
         let encoding: SampleEncoding = value.sample_format.into();
 
-        let spec: SampleSpec = SampleSpec::new(sr, bps, channels, encoding);
+        let spec: AudioSpec = AudioSpec::new(sr, bps, channels, encoding);
         spec
     }
 }
 
-impl From<SampleSpec> for WavSpec {
-    fn from(value: SampleSpec) -> Self {
+impl From<AudioSpec> for WavSpec {
+    fn from(value: AudioSpec) -> Self {
         let channels: u16 = value.channels();
         let sample_rate: u32 = value.sample_rate();
         let bits_per_sample: u16 = value.bits_per_sample();

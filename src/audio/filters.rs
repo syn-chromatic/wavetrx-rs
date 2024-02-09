@@ -5,17 +5,17 @@ use biquad::ToHertz;
 use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Type};
 use hound::{WavReader, WavSpec};
 
-use super::types::SampleSpec;
+use super::types::AudioSpec;
 use super::utils::get_bit_depth_magnitudes;
 use super::utils::save_audio;
 
 pub struct FrequencyPass<'a> {
     samples: &'a mut [f32],
-    spec: &'a SampleSpec,
+    spec: &'a AudioSpec,
 }
 
 impl<'a> FrequencyPass<'a> {
-    pub fn new(samples: &'a mut [f32], spec: &'a SampleSpec) -> Self {
+    pub fn new(samples: &'a mut [f32], spec: &'a AudioSpec) -> Self {
         FrequencyPass { samples, spec }
     }
 
@@ -94,7 +94,7 @@ impl<'a> FrequencyPass<'a> {
 fn test_function() {
     let filename: &str = "sweep_h.wav";
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-    let spec: SampleSpec = reader.spec().into();
+    let spec: AudioSpec = reader.spec().into();
     // let encoding = spec.encoding();
 
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();

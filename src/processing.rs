@@ -7,8 +7,8 @@ use rustfft::FftPlanner;
 
 use hound::{WavReader, WavSpec};
 
+use crate::audio::types::AudioSpec;
 use crate::audio::types::SampleEncoding;
-use crate::audio::types::SampleSpec;
 use crate::audio::utils::save_audio;
 
 use crate::protocol::rx::spectrum::FourierMagnitude;
@@ -94,7 +94,7 @@ fn test_func() {
     let filename = "test5.wav";
 
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-    let spec: SampleSpec = reader.spec().into();
+    let spec: AudioSpec = reader.spec().into();
     let audio_bps: usize = spec.bits_per_sample() as usize;
     let max_magnitude: f32 = ((2i32.pow(audio_bps as u32 - 1)) - 1) as f32;
     let sample_rate = spec.sample_rate() as usize;

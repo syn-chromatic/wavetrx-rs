@@ -9,7 +9,7 @@ use super::spectrum::{FourierMagnitude, Normalizer};
 use super::states::{RxMagnitudes, RxOutput};
 
 use crate::audio::filters::FrequencyPass;
-use crate::audio::types::SampleSpec;
+use crate::audio::types::AudioSpec;
 use crate::audio::utils::save_audio;
 
 use crate::protocol::profile::ProtocolProfile;
@@ -29,7 +29,7 @@ impl Receiver {
 
     pub fn from_file(&self, filename: &str) -> Option<Vec<u8>> {
         let (mut samples, spec) = self.read_file(filename);
-        let spec: SampleSpec = spec.into();
+        let spec: AudioSpec = spec.into();
         let tsz: usize = self.get_tone_sample_size(&spec);
         let gsz: usize = self.get_gap_sample_size(&spec);
 
@@ -67,7 +67,7 @@ impl Receiver {
         timestamp
     }
 
-    fn apply_frequency_filters(&self, samples: &mut [f32], spec: &SampleSpec) {
+    fn apply_frequency_filters(&self, samples: &mut [f32], spec: &AudioSpec) {
         let highpass_frequency: f32 = HP_FILTER;
         let lowpass_frequency: f32 = LP_FILTER;
 
@@ -201,7 +201,7 @@ impl Receiver {
         (bits, last_output)
     }
 
-    fn get_tone_sample_size(&self, spec: &SampleSpec) -> usize {
+    fn get_tone_sample_size(&self, spec: &AudioSpec) -> usize {
         let tone_pulse: &PulseDuration = &self.profile.pulses.tone;
 
         let sample_rate: usize = spec.sample_rate() as usize;
@@ -209,7 +209,7 @@ impl Receiver {
         sample_size
     }
 
-    fn get_gap_sample_size(&self, spec: &SampleSpec) -> usize {
+    fn get_gap_sample_size(&self, spec: &AudioSpec) -> usize {
         let gap_pulse: &PulseDuration = &self.profile.pulses.gap;
 
         let sample_rate: usize = spec.sample_rate() as usize;
@@ -312,7 +312,7 @@ impl Receiver {
         samples_chunk
     }
 
-    fn normalize_samples(&self, samples: &mut [f32], spec: &SampleSpec) {
+    fn normalize_samples(&self, samples: &mut [f32], spec: &AudioSpec) {
         let bit_depth: usize = spec.bits_per_sample() as usize;
         let mut normalizer: Normalizer<'_> = Normalizer::new(samples);
         normalizer.normalize(bit_depth, 0.1);
@@ -332,7 +332,7 @@ pub struct LiveReceiver {
     buffer: Vec<f32>,
     bits: Vec<u8>,
     resolver: RxResolver,
-    spec: SampleSpec,
+    spec: AudioSpec,
     frequency_magnitude: FourierMagnitude,
     sample_size: usize,
     start_idx: Option<usize>,
@@ -340,7 +340,7 @@ pub struct LiveReceiver {
 }
 
 impl LiveReceiver {
-    pub fn new(profile: ProtocolProfile, spec: SampleSpec) -> Self {
+    pub fn new(profile: ProtocolProfile, spec: AudioSpec) -> Self {
         let buffer: Vec<f32> = Vec::new();
         let bits: Vec<u8> = Vec::new();
         let resolver: RxResolver = RxResolver::new();
@@ -708,7 +708,7 @@ fn print_magnitude(magnitudes: &RxMagnitudes) {
     }
 }
 
-fn save_normalized(samples: &[f32], spec: &SampleSpec) {
+fn save_normalized(samples: &[f32], spec: &AudioSpec) {
     let bit_depth: usize = spec.bits_per_sample() as usize;
     let mut samples: Vec<f32> = samples.to_vec();
     let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);
@@ -717,7 +717,7 @@ fn save_normalized(samples: &[f32], spec: &SampleSpec) {
     save_audio("normalized.wav", &samples, spec);
 }
 
-pub fn save_normalized_name(filename: &str, samples: &[f32], spec: &SampleSpec) {
+pub fn save_normalized_name(filename: &str, samples: &[f32], spec: &AudioSpec) {
     let bit_depth: usize = spec.bits_per_sample() as usize;
     let mut samples: Vec<f32> = samples.to_vec();
     let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);

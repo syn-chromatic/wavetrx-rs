@@ -12,14 +12,14 @@ use cpal::StreamError;
 
 use super::types::FrameBuffer;
 
-pub struct Recorder {
+pub struct InputRecorder {
     device: Device,
     config: StreamConfig,
     buffer: Arc<FrameBuffer>,
     stream: Option<Stream>,
 }
 
-impl Recorder {
+impl InputRecorder {
     pub fn new(device: Device, config: StreamConfig) -> Self {
         let buffer: Arc<FrameBuffer> = FrameBuffer::new();
         let stream: Option<Stream> = None;
@@ -38,12 +38,12 @@ impl Recorder {
         Ok(())
     }
 
-    pub fn take_sample(&mut self) -> Option<Vec<f32>> {
+    pub fn take_frame(&mut self) -> Option<Vec<f32>> {
         self.buffer.take()
     }
 }
 
-impl Recorder {
+impl InputRecorder {
     fn data_callback(buffer: Arc<FrameBuffer>) -> impl Fn(&[f32], &InputCallbackInfo) {
         let callback = move |data: &[f32], info: &InputCallbackInfo| {
             let data: Vec<f32> = data.to_vec();
