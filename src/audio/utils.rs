@@ -6,17 +6,25 @@ use super::types::AudioSpec;
 
 pub trait Scalar {
     fn to_i32(&self) -> i32;
+    fn to_f32(&self) -> f32;
 }
 
 impl Scalar for i32 {
     fn to_i32(&self) -> i32 {
         *self
     }
+
+    fn to_f32(&self) -> f32 {
+        *self as f32
+    }
 }
 
 impl Scalar for f32 {
     fn to_i32(&self) -> i32 {
         *self as i32
+    }
+    fn to_f32(&self) -> f32 {
+        *self
     }
 }
 
@@ -66,9 +74,20 @@ pub fn save_audio<T: Scalar>(filename: &str, samples: &[T], spec: &AudioSpec) {
     let mut writer: WavWriter<BufWriter<File>> =
         WavWriter::create(filename, wav_spec).expect("Error creating WAV writer");
 
-    for sample in samples {
-        writer
-            .write_sample(sample.to_i32())
-            .expect("Error writing sample");
+    match spec.encoding() {
+        super::types::SampleEncoding::F32 => {
+            for sample in samples {
+                writer
+                    .write_sample(sample.to_f32())
+                    .expect("Error writing sample");
+            }
+        }
+        super::types::SampleEncoding::I32 => {
+            for sample in samples {
+                writer
+                    .write_sample(sample.to_i32())
+                    .expect("Error writing sample");
+            }
+        }
     }
 }

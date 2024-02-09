@@ -9,18 +9,18 @@ use crate::audio::utils::get_bit_depth_magnitudes;
 use crate::protocol::profile::ProtocolProfile;
 
 pub struct ToneGenerator {
-    writer: WavWriter<BufWriter<File>>,
+    samples: Vec<i32>,
     spec: WavSpec,
     p_magnitude: f32,
     n_magnitude: f32,
 }
 
 impl ToneGenerator {
-    pub fn new(filename: &str, spec: WavSpec) -> Result<Self, hound::Error> {
-        let writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
+    pub fn new(spec: WavSpec) -> Result<Self, Box<dyn std::error::Error>> {
+        let samples: Vec<i32> = Vec::new();
         let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(&spec);
         let tone_generator: ToneGenerator = ToneGenerator {
-            writer,
+            samples,
             spec,
             p_magnitude,
             n_magnitude,
@@ -28,7 +28,11 @@ impl ToneGenerator {
         Ok(tone_generator)
     }
 
-    pub fn append_tone(&mut self, frequency: f32, duration: usize) -> Result<(), hound::Error> {
+    pub fn append_tone(
+        &mut self,
+        frequency: f32,
+        duration: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let sample_rate: usize = self.spec.sample_rate as usize;
 
         let sample_size: usize = (sample_rate * duration) / 1_000_000;
@@ -36,7 +40,7 @@ impl ToneGenerator {
 
         for idx in 0..sample_size {
             let sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
-            self.writer.write_sample(sine_magnitude as i32)?;
+            self.samples.push(sine_magnitude as i32);
         }
 
         Ok(())
@@ -47,7 +51,7 @@ impl ToneGenerator {
         frequency: f32,
         duration: usize,
         fade_ratio: f32,
-    ) -> Result<(), hound::Error> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let sample_rate: usize = self.spec.sample_rate as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
         let period: f32 = sample_rate as f32 / frequency;
@@ -57,7 +61,7 @@ impl ToneGenerator {
             let mut sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
             let fade_coefficient: f32 = self.get_sine_fade_coeff(idx, sample_size, fade_size);
             sine_magnitude *= fade_coefficient;
-            self.writer.write_sample(sine_magnitude as i32)?;
+            self.samples.push(sine_magnitude as i32);
         }
 
         Ok(())
@@ -68,7 +72,7 @@ impl ToneGenerator {
         frequency: f32,
         duration: usize,
         fade_ratio: f32,
-    ) -> Result<(), hound::Error> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let sample_rate: usize = self.spec.sample_rate as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
         let period: f32 = sample_rate as f32 / frequency;
@@ -78,7 +82,7 @@ impl ToneGenerator {
             let mut sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
             let fade_coefficient: f32 = self.get_linear_fade_coeff(idx, sample_size, fade_size);
             sine_magnitude *= fade_coefficient;
-            self.writer.write_sample(sine_magnitude as i32)?;
+            self.samples.push(sine_magnitude as i32);
         }
 
         Ok(())
@@ -133,9 +137,9 @@ impl Transmitter {
         }
     }
 
-    pub fn create_file(&self, filename: &str, data: &[u8]) -> Result<(), hound::Error> {
+    pub fn create(&self, data: &[u8]) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
         let spec: WavSpec = self.get_wave_spec();
-        let mut tone: ToneGenerator = ToneGenerator::new(filename, spec)?;
+        let mut tone: ToneGenerator = ToneGenerator::new(spec)?;
         let fade_ratio: f32 = 0.1;
 
         self.append_start(&mut tone, fade_ratio)?;
@@ -147,6 +151,33 @@ impl Transmitter {
 
         self.append_end(&mut tone, fade_ratio)?;
         self.append_next(&mut tone, fade_ratio)?;
+        Ok(tone.samples)
+    }
+
+    pub fn create_file(
+        &self,
+        filename: &str,
+        data: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let spec: WavSpec = self.get_wave_spec();
+        let mut tone: ToneGenerator = ToneGenerator::new(spec)?;
+        let fade_ratio: f32 = 0.1;
+
+        self.append_start(&mut tone, fade_ratio)?;
+        self.append_next(&mut tone, fade_ratio)?;
+
+        for &byte in data.iter() {
+            self.append_byte(&mut tone, byte, fade_ratio)?;
+        }
+
+        self.append_end(&mut tone, fade_ratio)?;
+        self.append_next(&mut tone, fade_ratio)?;
+
+        let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
+        for sample in tone.samples {
+            writer.write_sample(sample)?;
+        }
+
         Ok(())
     }
 }
@@ -167,7 +198,7 @@ impl Transmitter {
         tone: &mut ToneGenerator,
         byte: u8,
         fade_ratio: f32,
-    ) -> Result<(), hound::Error> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         for i in (0..8).rev() {
             let bit: bool = (byte & (1 << i)) != 0;
             self.append_bit(tone, bit, fade_ratio)?;
@@ -176,7 +207,11 @@ impl Transmitter {
         Ok(())
     }
 
-    fn append_start(&self, tone: &mut ToneGenerator, fade_ratio: f32) -> Result<(), hound::Error> {
+    fn append_start(
+        &self,
+        tone: &mut ToneGenerator,
+        fade_ratio: f32,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
         let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
         let frequency: f32 = self.profile.markers.start.hz();
@@ -186,7 +221,11 @@ impl Transmitter {
         Ok(())
     }
 
-    fn append_end(&self, tone: &mut ToneGenerator, fade_ratio: f32) -> Result<(), hound::Error> {
+    fn append_end(
+        &self,
+        tone: &mut ToneGenerator,
+        fade_ratio: f32,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
         let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
         let frequency: f32 = self.profile.markers.end.hz();
@@ -196,7 +235,11 @@ impl Transmitter {
         Ok(())
     }
 
-    fn append_next(&self, tone: &mut ToneGenerator, fade_ratio: f32) -> Result<(), hound::Error> {
+    fn append_next(
+        &self,
+        tone: &mut ToneGenerator,
+        fade_ratio: f32,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
         let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
         let frequency: f32 = self.profile.markers.next.hz();
@@ -211,7 +254,7 @@ impl Transmitter {
         tone: &mut ToneGenerator,
         bit: bool,
         fade_ratio: f32,
-    ) -> Result<(), hound::Error> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let frequency: f32 = self.profile.bits.from_boolean(bit).hz();
         let tone_duration: usize = self.profile.pulses.tone.as_micros::<usize>();
         let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();

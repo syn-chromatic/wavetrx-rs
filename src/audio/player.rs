@@ -45,6 +45,10 @@ impl OutputPlayer {
     pub fn add_sample(&self, sample: f32) {
         self.buffer.add(sample);
     }
+
+    pub fn wait(&self) {
+        while !self.buffer.buffer_empty() {}
+    }
 }
 
 impl OutputPlayer {

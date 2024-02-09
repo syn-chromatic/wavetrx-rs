@@ -36,8 +36,8 @@ impl From<AudioSpec> for WavSpec {
 impl From<SampleFormat> for SampleEncoding {
     fn from(value: SampleFormat) -> Self {
         match value {
-            SampleFormat::Float => SampleEncoding::Float,
-            SampleFormat::Int => SampleEncoding::Int,
+            SampleFormat::Float => SampleEncoding::F32,
+            SampleFormat::Int => SampleEncoding::I32,
         }
     }
 }
@@ -45,8 +45,8 @@ impl From<SampleFormat> for SampleEncoding {
 impl From<SampleEncoding> for SampleFormat {
     fn from(value: SampleEncoding) -> Self {
         match value {
-            SampleEncoding::Float => SampleFormat::Float,
-            SampleEncoding::Int => SampleFormat::Int,
+            SampleEncoding::F32 => SampleFormat::Float,
+            SampleEncoding::I32 => SampleFormat::Int,
         }
     }
 }

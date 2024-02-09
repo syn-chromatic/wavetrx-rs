@@ -5,8 +5,8 @@ use std::collections::LinkedList;
 
 #[derive(Clone, Copy)]
 pub enum SampleEncoding {
-    Float,
-    Int,
+    F32,
+    I32,
 }
 
 #[derive(Clone, Copy)]
@@ -89,5 +89,12 @@ impl SampleBuffer {
             return buffer_guard.pop_front();
         }
         None
+    }
+
+    pub fn buffer_empty(self: &Arc<Self>) -> bool {
+        if let Ok(buffer_guard) = self.buffer.read() {
+            return buffer_guard.is_empty();
+        }
+        false
     }
 }

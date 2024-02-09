@@ -15,6 +15,8 @@ use crate::protocol::rx::receiver::Receiver;
 use crate::protocol::tx::transmitter::Transmitter;
 use crate::protocol::utils::bits_to_string;
 
+use crate::tests::test_transmitter_player;
+
 use crate::consts::{
     AUDIO_BPS, AUDIO_SR, BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT,
     MARKER_TONE_START, MIN_FREQ_SEP, PULSE_GAP_US, PULSE_LENGTH_US,
@@ -42,7 +44,7 @@ fn transmitter() {
     let bit_depth: usize = AUDIO_BPS;
 
     let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
-    let result: Result<(), hound::Error> = transmitter.create_file(filename, data);
+    let result: Result<(), Box<dyn std::error::Error>> = transmitter.create_file(filename, data);
 
     if let Err(err) = result {
         println!("Error: Failed to generate data: {:?}", err);
@@ -75,10 +77,13 @@ fn receiver() {
 }
 
 fn main() {
-    println!("Transmitting..");
-    transmitter();
-    println!("\n");
+    // println!("Transmitting..");
+    // transmitter();
+    // println!("\n");
 
-    println!("Receiving..");
-    receiver();
+    // println!("Receiving..");
+    // receiver();
+
+    test_transmitter_player();
+
 }

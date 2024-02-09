@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -23,6 +24,19 @@ use crate::audio::utils::save_audio;
 use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
 use crate::get_profile;
 
+fn input(prompt: &str) -> String {
+    let mut input: String = String::new();
+    print!("{}", prompt);
+
+    io::stdout().flush().unwrap(); // Ensure the prompt is displayed immediately
+
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read line");
+
+    input.trim().to_string() // Trimming to remove any trailing newline characters
+}
+
 #[test]
 fn test_transmitter() {
     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
@@ -37,7 +51,7 @@ fn test_transmitter() {
     let bit_depth: usize = AUDIO_BPS;
 
     let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
-    let result: Result<(), hound::Error> = transmitter.create_file(filename, data);
+    let result: Result<(), Box<dyn std::error::Error>> = transmitter.create_file(filename, data);
 
     if let Err(err) = result {
         println!("Error: Failed to generate data: {:?}", err);
@@ -118,7 +132,7 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sample Size: {}", sample_format.sample_size());
     println!("Bits Per Sample: {}", bits_per_sample);
 
-    let spec: AudioSpec = AudioSpec::new(sample_rate, 32, 1, SampleEncoding::Int);
+    let spec: AudioSpec = AudioSpec::new(sample_rate, 32, 1, SampleEncoding::I32);
 
     let profile: ProtocolProfile = get_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
@@ -176,7 +190,7 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sample Size: {}", sample_format.sample_size());
     println!("Bits Per Sample: {}", bits_per_sample);
 
-    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::Int);
+    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::I32);
 
     let profile: ProtocolProfile = get_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
@@ -236,7 +250,7 @@ fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>> {
     println!("Sample Size: {}", sample_format.sample_size());
     println!("Bits Per Sample: {}", bits_per_sample);
 
-    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::Int);
+    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::I32);
 
     let profile: ProtocolProfile = get_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
@@ -246,7 +260,7 @@ fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Live Receiver");
 
-    let mut frames: Vec<f32> = Vec::new();
+    let mut samples: Vec<f32> = Vec::new();
 
     loop {
         if let Some(frame) = recorder.take_frame() {
@@ -258,21 +272,20 @@ fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            frames.extend(frame);
+            samples.extend(frame);
 
             live_receiver.append_sample(&mut sc_frame);
         }
 
-        if frames.len() >= 10_000_000 {
-            break;
-        }
+        // if samples.len() >= 500_000 {
+        //     break;
+        // }
     }
 
-    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 2, SampleEncoding::Int);
-    save_normalized_name("record_audio_test.wav", &frames, &spec);
+    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 2, SampleEncoding::F32);
+    // save_normalized_name("record_audio_test.wav", &samples, &spec);
+    save_audio("record_audio_test.wav", &samples, &spec);
     println!("Done");
-
-    // std::thread::sleep(std::time::Duration::from_secs(180));
 
     Ok(())
 }
@@ -314,6 +327,56 @@ fn test_player() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Done!");
     std::thread::sleep(std::time::Duration::from_secs(180));
+
+    Ok(())
+}
+
+fn transmit_string(string: &str) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
+    // println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
+    let data: &[u8] = string.as_bytes();
+    println!("Data: {:?}", data);
+
+    let profile: ProtocolProfile = get_profile();
+    let sample_rate: usize = AUDIO_SR;
+    let bit_depth: usize = AUDIO_BPS;
+
+    let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
+    let result: Result<Vec<i32>, Box<dyn std::error::Error>> = transmitter.create(data);
+
+    if let Err(err) = result {
+        panic!("Error: Failed to generate data: {:?}", err);
+    }
+
+    println!("Generated {} bytes", data.len());
+    result
+}
+
+// #[test]
+pub fn test_transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or("No output device available")?;
+    let config = device.default_output_config()?;
+
+    let sample_rate = config.sample_rate().0;
+    let spec: AudioSpec = AudioSpec::new(sample_rate, 4, 1, SampleEncoding::F32);
+
+    let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
+    player.play()?;
+
+    loop {
+        let string: String = input("Input: ");
+        if let Ok(samples) = transmit_string(&string) {
+            for sample in samples {
+                let sample = (sample as f32) / (i32::MAX as f32);
+                player.add_sample(sample);
+            }
+
+            player.wait();
+            println!();
+        }
+    }
 
     Ok(())
 }
