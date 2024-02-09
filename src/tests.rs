@@ -260,7 +260,7 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
 
     println!("\n[Live Receiver]");
 
-    let mut samples: Vec<f32> = Vec::new();
+    // let mut samples: Vec<f32> = Vec::new();
 
     loop {
         if let Some(frame) = recorder.take_frame() {
@@ -272,7 +272,7 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
                 }
             }
 
-            samples.extend(frame);
+            // samples.extend(frame);
 
             live_receiver.append_sample(&mut sc_frame);
         }
@@ -282,10 +282,10 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
         // }
     }
 
-    let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 2, SampleEncoding::F32);
-    // save_normalized_name("record_audio_test.wav", &samples, &spec);
-    save_audio("record_audio_test.wav", &samples, &spec);
-    println!("Done");
+    // let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 2, SampleEncoding::F32);
+    // // save_normalized_name("record_audio_test.wav", &samples, &spec);
+    // save_audio("record_audio_test.wav", &samples, &spec);
+    // println!("Done");
 
     Ok(())
 }
