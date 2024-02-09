@@ -230,16 +230,16 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[test]
-fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>> {
+// #[test]
+pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>> {
     let host: cpal::Host = cpal::default_host();
     let device = host
         .default_output_device()
         .ok_or("No output device available")?;
     let config = device.default_output_config()?;
 
-    println!("Default Output device: {}", device.name()?);
-    println!("Default Output format: {:?}", config);
+    println!("Output device: {}", device.name()?);
+    // println!("Default Output format: {:?}", config);
 
     let channels: u16 = config.channels();
     let sample_rate: u32 = config.sample_rate().0;
@@ -258,7 +258,7 @@ fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>> {
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());
     recorder.record()?;
 
-    println!("Live Receiver");
+    println!("\n[Live Receiver]");
 
     let mut samples: Vec<f32> = Vec::new();
 
@@ -364,6 +364,8 @@ pub fn test_transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
     player.play()?;
+
+    println!("[Transmitter]");
 
     loop {
         let string: String = input("Input: ");

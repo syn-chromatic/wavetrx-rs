@@ -7,6 +7,7 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 
 use crate::audio::utils::get_bit_depth_magnitudes;
 use crate::protocol::profile::ProtocolProfile;
+use crate::protocol::profile::PulseDuration;
 
 pub struct ToneGenerator {
     samples: Vec<i32>,
@@ -151,6 +152,7 @@ impl Transmitter {
 
         self.append_end(&mut tone, fade_ratio)?;
         self.append_next(&mut tone, fade_ratio)?;
+        tone.append_tone(0.0, 100_000)?;
         Ok(tone.samples)
     }
 

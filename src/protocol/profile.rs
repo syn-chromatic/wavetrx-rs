@@ -18,32 +18,32 @@ impl PulseDuration {
         Self(duration)
     }
 
-    pub fn from_nanos<T>(&self, nanos: T) -> Duration
+    pub fn from_nanos<T>(nanos: T) -> Self
     where
         T: Into<u64>,
     {
-        Duration::from_nanos(T::into(nanos))
+        Self::from_duration(Duration::from_nanos(T::into(nanos)))
     }
 
-    pub fn from_micros<T>(&self, micros: T) -> Duration
+    pub fn from_micros<T>(micros: T) -> Self
     where
         T: Into<u64>,
     {
-        Duration::from_micros(T::into(micros))
+        Self::from_duration(Duration::from_micros(T::into(micros)))
     }
 
-    pub fn from_millis<T>(&self, millis: T) -> Duration
+    pub fn from_millis<T>(millis: T) -> Self
     where
         T: Into<u64>,
     {
-        Duration::from_millis(T::into(millis))
+        Self::from_duration(Duration::from_millis(T::into(millis)))
     }
 
-    pub fn from_secs<T>(&self, secs: T) -> Duration
+    pub fn from_secs<T>(secs: T) -> Self
     where
         T: Into<u64>,
     {
-        Duration::from_secs(T::into(secs))
+        Self::from_duration(Duration::from_secs(T::into(secs)))
     }
 
     pub fn as_nanos<T>(&self) -> T

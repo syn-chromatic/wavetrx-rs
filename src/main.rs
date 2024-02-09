@@ -15,6 +15,7 @@ use crate::protocol::rx::receiver::Receiver;
 use crate::protocol::tx::transmitter::Transmitter;
 use crate::protocol::utils::bits_to_string;
 
+use crate::tests::test_live_recording_receiver3;
 use crate::tests::test_transmitter_player;
 
 use crate::consts::{
@@ -84,6 +85,6 @@ fn main() {
     // println!("Receiving..");
     // receiver();
 
-    test_transmitter_player();
-
+    // test_transmitter_player();
+    test_live_recording_receiver3();
 }
