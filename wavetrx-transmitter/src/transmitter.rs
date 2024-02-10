@@ -1,6 +1,5 @@
-use std::io::{self, Write};
-use std::thread::sleep;
-use std::time::Duration;
+use std::io;
+use std::io::Write;
 
 use cpal::Device;
 use cpal::Host;
@@ -17,8 +16,6 @@ use wavetrx::audio::types::SampleEncoding;
 use wavetrx::protocol::profile::ProtocolProfile;
 use wavetrx::tx::transmitter::Transmitter;
 
-use wavetrx::consts::AUDIO_BPS;
-use wavetrx::consts::AUDIO_SR;
 use wavetrx::get_profile;
 
 fn input(prompt: &str) -> String {
@@ -36,10 +33,8 @@ fn input(prompt: &str) -> String {
 
 fn transmit_string(string: &str, spec: &AudioSpec) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
     let data: &[u8] = string.as_bytes();
-    // println!("Data: {:?}", data);
 
     let profile: ProtocolProfile = get_profile();
-
     let transmitter: Transmitter = Transmitter::new(profile, spec);
     let result: Result<Vec<i32>, Box<dyn std::error::Error>> = transmitter.create(data);
 

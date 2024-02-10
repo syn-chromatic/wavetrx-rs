@@ -12,8 +12,8 @@ use crate::protocol::profile::ProtocolProfile;
 use crate::protocol::profile::Pulses;
 
 use crate::consts::{
-    AUDIO_BPS, AUDIO_SR, BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT,
-    MARKER_TONE_START, MIN_FREQ_SEP, PULSE_GAP_US, PULSE_LENGTH_US,
+    BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT, MARKER_TONE_START,
+    PULSE_GAP_US, PULSE_LENGTH_US,
 };
 
 pub fn get_profile() -> ProtocolProfile {

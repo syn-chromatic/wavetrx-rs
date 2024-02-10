@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-pub const AUDIO_BPS: usize = 32;
-pub const AUDIO_SR: usize = 48_000;
+// pub const AUDIO_BPS: usize = 32;
+// pub const AUDIO_SR: usize = 48_000;
 
-pub const SAMPLE_SIZE: f32 = (AUDIO_SR as f32 * PULSE_LENGTH_US.as_micros() as f32) / 1_000_000.0;
-pub const MIN_FREQ_SEP: f32 = AUDIO_SR as f32 / SAMPLE_SIZE;
+// pub const SAMPLE_SIZE: f32 = (AUDIO_SR as f32 * PULSE_LENGTH_US.as_micros() as f32) / 1_000_000.0;
+// pub const MIN_FREQ_SEP: f32 = AUDIO_SR as f32 / SAMPLE_SIZE;
 
 pub const LP_FILTER: f32 = 18_000.0;
 pub const HP_FILTER: f32 = 200.0;
