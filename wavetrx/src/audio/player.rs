@@ -81,7 +81,7 @@ impl OutputPlayer {
         buffer: Arc<SampleBuffer>,
         spec: Arc<AudioSpec>,
     ) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
-        let callback = move |data: &mut [f32], info: &OutputCallbackInfo| {
+        let callback = move |data: &mut [f32], _: &OutputCallbackInfo| {
             //
             if !buffer.buffer_empty() {
                 match spec.channels() {

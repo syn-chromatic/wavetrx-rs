@@ -7,7 +7,6 @@ use rustfft::num_complex::Complex;
 use rustfft::Fft;
 use rustfft::FftPlanner;
 
-use crate::audio::types::SampleEncoding;
 use crate::audio::types::AudioSpec;
 use crate::audio::utils::get_bit_depth_magnitudes;
 

@@ -45,7 +45,7 @@ impl InputRecorder {
 
 impl InputRecorder {
     fn data_callback(buffer: Arc<FrameBuffer>) -> impl Fn(&[f32], &InputCallbackInfo) {
-        let callback = move |data: &[f32], info: &InputCallbackInfo| {
+        let callback = move |data: &[f32], _: &InputCallbackInfo| {
             let data: Vec<f32> = data.to_vec();
             buffer.add(data);
         };

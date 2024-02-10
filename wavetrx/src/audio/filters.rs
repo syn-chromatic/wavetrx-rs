@@ -1,13 +1,12 @@
-use std::fs::File;
-use std::io::BufReader;
-
+use biquad::Biquad;
+use biquad::Coefficients;
+use biquad::DirectForm1;
+use biquad::Hertz;
 use biquad::ToHertz;
-use biquad::{Biquad, Coefficients, DirectForm1, Hertz, Type};
-use hound::{WavReader, WavSpec};
+use biquad::Type;
 
 use super::types::AudioSpec;
 use super::utils::get_bit_depth_magnitudes;
-use super::utils::save_audio;
 
 pub struct FrequencyPass<'a> {
     samples: &'a mut [f32],
@@ -92,6 +91,11 @@ impl<'a> FrequencyPass<'a> {
 
 #[test]
 fn test_function() {
+    use super::utils::save_audio;
+    use hound::WavReader;
+    use std::fs::File;
+    use std::io::BufReader;
+
     let filename: &str = "sweep_h.wav";
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let spec: AudioSpec = reader.spec().into();
