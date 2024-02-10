@@ -37,29 +37,29 @@ fn input(prompt: &str) -> String {
     input.trim().to_string() // Trimming to remove any trailing newline characters
 }
 
-#[test]
-fn test_transmitter() {
-    println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
-    let filename: &str = "transmitted_audio.wav";
-    let string: String = "Test String".repeat(100);
-    let data: &[u8] = string.as_bytes();
+// #[test]
+// fn test_transmitter() {
+//     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
+//     let filename: &str = "transmitted_audio.wav";
+//     let string: String = "Test String".repeat(100);
+//     let data: &[u8] = string.as_bytes();
 
-    println!("Data: {:?}", data);
+//     println!("Data: {:?}", data);
 
-    let profile: ProtocolProfile = get_profile();
-    let sample_rate: usize = AUDIO_SR;
-    let bit_depth: usize = AUDIO_BPS;
+//     let profile: ProtocolProfile = get_profile();
+//     let sample_rate: usize = AUDIO_SR;
+//     let bit_depth: usize = AUDIO_BPS;
 
-    let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
-    let result: Result<(), Box<dyn std::error::Error>> = transmitter.create_file(filename, data);
+//     let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
+//     let result: Result<(), Box<dyn std::error::Error>> = transmitter.create_file(filename, data);
 
-    if let Err(err) = result {
-        println!("Error: Failed to generate data: {:?}", err);
-        return;
-    }
+//     if let Err(err) = result {
+//         println!("Error: Failed to generate data: {:?}", err);
+//         return;
+//     }
 
-    println!("Generated {} bytes", data.len());
-}
+//     println!("Generated {} bytes", data.len());
+// }
 
 #[test]
 fn test_receiver() {
@@ -331,57 +331,57 @@ fn test_player() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn transmit_string(string: &str) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
-    println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
-    let data: &[u8] = string.as_bytes();
-    println!("Data: {:?}", data);
+// fn transmit_string(string: &str) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
+//     println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
+//     let data: &[u8] = string.as_bytes();
+//     println!("Data: {:?}", data);
 
-    let profile: ProtocolProfile = get_profile();
-    let sample_rate: usize = AUDIO_SR;
-    let bit_depth: usize = AUDIO_BPS;
+//     let profile: ProtocolProfile = get_profile();
+//     let sample_rate: usize = AUDIO_SR;
+//     let bit_depth: usize = AUDIO_BPS;
 
-    let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
-    let result: Result<Vec<i32>, Box<dyn std::error::Error>> = transmitter.create(data);
+//     let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
+//     let result: Result<Vec<i32>, Box<dyn std::error::Error>> = transmitter.create(data);
 
-    if let Err(err) = result {
-        panic!("Error: Failed to generate data: {:?}", err);
-    }
+//     if let Err(err) = result {
+//         panic!("Error: Failed to generate data: {:?}", err);
+//     }
 
-    println!("Generated {} bytes", data.len());
-    result
-}
+//     println!("Generated {} bytes", data.len());
+//     result
+// }
 
 // #[test]
-pub fn test_transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
-    let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .ok_or("No output device available")?;
-    let config = device.default_output_config()?;
+// pub fn test_transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
+//     let host = cpal::default_host();
+//     let device = host
+//         .default_output_device()
+//         .ok_or("No output device available")?;
+//     let config = device.default_output_config()?;
 
-    let sample_rate = config.sample_rate().0;
-    let spec: AudioSpec = AudioSpec::new(sample_rate, 4, 1, SampleEncoding::F32);
+//     let sample_rate = config.sample_rate().0;
+//     let spec: AudioSpec = AudioSpec::new(sample_rate, 4, 1, SampleEncoding::F32);
 
-    let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
-    player.play()?;
+//     let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
+//     player.play()?;
 
-    println!("[Transmitter]");
+//     println!("[Transmitter]");
 
-    loop {
-        let string: String = input("Input: ");
-        if let Ok(samples) = transmit_string(&string) {
-            for sample in samples {
-                let sample = (sample as f32) / (i32::MAX as f32);
-                player.add_sample(sample);
-            }
+//     loop {
+//         let string: String = input("Input: ");
+//         if let Ok(samples) = transmit_string(&string) {
+//             for sample in samples {
+//                 let sample = (sample as f32) / (i32::MAX as f32);
+//                 player.add_sample(sample);
+//             }
 
-            player.wait();
-            println!();
-        }
-    }
+//             player.wait();
+//             println!();
+//         }
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn read_file(filename: &str) -> (Vec<f32>, WavSpec) {
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();

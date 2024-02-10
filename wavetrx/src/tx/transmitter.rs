@@ -5,21 +5,18 @@ use hound;
 use hound::{SampleFormat, WavSpec, WavWriter};
 
 use super::tone::ToneGenerator;
+use crate::audio::types::AudioSpec;
 use crate::protocol::profile::ProtocolProfile;
 
 pub struct Transmitter {
     profile: ProtocolProfile,
-    sample_rate: usize,
-    bit_depth: usize,
+    spec: AudioSpec,
 }
 
 impl Transmitter {
-    pub fn new(profile: ProtocolProfile, sample_rate: usize, bit_depth: usize) -> Self {
-        Transmitter {
-            profile,
-            sample_rate,
-            bit_depth,
-        }
+    pub fn new(profile: ProtocolProfile, spec: &AudioSpec) -> Self {
+        let spec: AudioSpec = spec.clone();
+        Transmitter { profile, spec }
     }
 
     pub fn create(&self, data: &[u8]) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
@@ -62,8 +59,8 @@ impl Transmitter {
     fn get_wave_spec(&self) -> WavSpec {
         let spec: WavSpec = WavSpec {
             channels: 1,
-            sample_rate: self.sample_rate as u32,
-            bits_per_sample: self.bit_depth as u16,
+            sample_rate: self.spec.sample_rate(),
+            bits_per_sample: self.spec.bits_per_sample(),
             sample_format: SampleFormat::Int,
         };
         spec

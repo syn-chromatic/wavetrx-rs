@@ -34,15 +34,13 @@ fn input(prompt: &str) -> String {
     input.trim().to_string()
 }
 
-fn transmit_string(string: &str) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
+fn transmit_string(string: &str, spec: &AudioSpec) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
     let data: &[u8] = string.as_bytes();
-    println!("Data: {:?}", data);
+    // println!("Data: {:?}", data);
 
     let profile: ProtocolProfile = get_profile();
-    let sample_rate: usize = AUDIO_SR;
-    let bit_depth: usize = AUDIO_BPS;
 
-    let transmitter: Transmitter = Transmitter::new(profile, sample_rate, bit_depth);
+    let transmitter: Transmitter = Transmitter::new(profile, spec);
     let result: Result<Vec<i32>, Box<dyn std::error::Error>> = transmitter.create(data);
 
     if let Err(err) = result {
@@ -85,7 +83,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         let string: String = input("Input: ");
-        if let Ok(samples) = transmit_string(&string) {
+        if let Ok(samples) = transmit_string(&string, &spec) {
             for sample in samples {
                 let sample = (sample as f32) / (i32::MAX as f32);
                 player.add_sample(sample);
