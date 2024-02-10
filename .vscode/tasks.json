@@ -3,7 +3,7 @@
   "tasks": [
     {
       "type": "shell",
-      "command": "cargo run --release --bin wavetrx-receiver",
+      "command": "cargo run --release --bin ${input:variableInput}",
       "problemMatcher": [
         "$rustc"
       ],
@@ -12,6 +12,13 @@
         "kind": "build",
         "isDefault": true
       }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "variableInput",
+      "type": "promptString",
+      "description": "Enter the value for VARIABLE"
     }
   ]
 }
