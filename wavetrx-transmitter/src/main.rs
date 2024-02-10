@@ -1,7 +1,6 @@
-mod tests;
-use crate::tests::test_transmitter_player;
+mod transmitter;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    test_transmitter_player()?;
+    transmitter::transmitter_player()?;
     Ok(())
 }

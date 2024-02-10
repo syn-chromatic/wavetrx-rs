@@ -1,7 +1,6 @@
-mod tests;
-use crate::tests::test_live_recording_receiver3;
+mod receiver;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    test_live_recording_receiver3()?;
+    receiver::live_output_receiver()?;
     Ok(())
 }
