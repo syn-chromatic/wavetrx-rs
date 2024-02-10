@@ -3,7 +3,7 @@
   "tasks": [
     {
       "type": "shell",
-      "command": "cargo run --release --bin wavetrx-receiver",
+      "command": "cargo run --release",
       "problemMatcher": [
         "$rustc"
       ],

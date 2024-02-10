@@ -1,0 +1,15 @@
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package]
+name = "wavetrx-receiver"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+wavetrx = { path = "../wavetrx" }
+
+hound = "3.5.0"
+rustfft = "6.1.0"
+biquad = "0.3.0"
+cpal = "0.15.2"
