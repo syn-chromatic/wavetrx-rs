@@ -1,4 +1,4 @@
-## `⌽` WaveTrx Library
+## `⌽` WaveTrx Transmitter
 ```
 //
 ```
