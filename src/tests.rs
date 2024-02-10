@@ -332,7 +332,7 @@ fn test_player() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn transmit_string(string: &str) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
-    // println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
+    println!("MIN FREQUENCY SEPARATION: {} hz", MIN_FREQ_SEP);
     let data: &[u8] = string.as_bytes();
     println!("Data: {:?}", data);
 

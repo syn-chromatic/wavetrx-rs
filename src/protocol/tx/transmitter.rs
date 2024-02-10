@@ -143,6 +143,7 @@ impl Transmitter {
         let mut tone: ToneGenerator = ToneGenerator::new(spec)?;
         let fade_ratio: f32 = 0.1;
 
+        self.append_silence(&mut tone)?;
         self.append_start(&mut tone, fade_ratio)?;
         self.append_next(&mut tone, fade_ratio)?;
 
@@ -152,7 +153,7 @@ impl Transmitter {
 
         self.append_end(&mut tone, fade_ratio)?;
         self.append_next(&mut tone, fade_ratio)?;
-        tone.append_tone(0.0, 100_000)?;
+        self.append_silence(&mut tone)?;
         Ok(tone.samples)
     }
 
@@ -162,21 +163,10 @@ impl Transmitter {
         data: &[u8],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let spec: WavSpec = self.get_wave_spec();
-        let mut tone: ToneGenerator = ToneGenerator::new(spec)?;
-        let fade_ratio: f32 = 0.1;
-
-        self.append_start(&mut tone, fade_ratio)?;
-        self.append_next(&mut tone, fade_ratio)?;
-
-        for &byte in data.iter() {
-            self.append_byte(&mut tone, byte, fade_ratio)?;
-        }
-
-        self.append_end(&mut tone, fade_ratio)?;
-        self.append_next(&mut tone, fade_ratio)?;
+        let samples: Vec<i32> = self.create(data)?;
 
         let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
-        for sample in tone.samples {
+        for sample in samples {
             writer.write_sample(sample)?;
         }
 
@@ -247,6 +237,13 @@ impl Transmitter {
         let frequency: f32 = self.profile.markers.next.hz();
 
         tone.append_sine_faded_tone(frequency, tone_duration, fade_ratio)?;
+        tone.append_tone(0.0, gap_duration)?;
+        Ok(())
+    }
+
+    fn append_silence(&self, tone: &mut ToneGenerator) -> Result<(), Box<dyn std::error::Error>> {
+        let gap_duration: usize = self.profile.pulses.gap.as_micros::<usize>();
+        let gap_duration = gap_duration * 4;
         tone.append_tone(0.0, gap_duration)?;
         Ok(())
     }
