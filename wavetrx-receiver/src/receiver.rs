@@ -1,3 +1,6 @@
+use std::thread::sleep;
+use std::time::Duration;
+
 use cpal::Device;
 use cpal::Host;
 use cpal::SampleFormat;
@@ -73,6 +76,8 @@ pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             live_receiver.append_sample(&mut sc_frame);
+            continue;
         }
+        sleep(Duration::from_millis(50));
     }
 }

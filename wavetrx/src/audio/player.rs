@@ -59,7 +59,9 @@ impl OutputPlayer {
                 data[count] = sample;
                 data[count + 1] = sample;
                 count += 2;
+                continue;
             }
+            break;
         }
     }
 
@@ -69,7 +71,9 @@ impl OutputPlayer {
             if let Some(sample) = buffer.take() {
                 data[count] = sample;
                 count += 1;
+                continue;
             }
+            break;
         }
     }
 
@@ -79,10 +83,12 @@ impl OutputPlayer {
     ) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
         let callback = move |data: &mut [f32], info: &OutputCallbackInfo| {
             //
-            match spec.channels() {
-                1 => Self::append_mono(data, &buffer),
-                2 => Self::append_stereo(data, &buffer),
-                _ => {}
+            if !buffer.buffer_empty() {
+                match spec.channels() {
+                    1 => Self::append_mono(data, &buffer),
+                    2 => Self::append_stereo(data, &buffer),
+                    _ => {}
+                }
             }
         };
 
