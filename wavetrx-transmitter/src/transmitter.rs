@@ -73,6 +73,7 @@ pub fn get_mono_audio_spec_f32(config: &SupportedStreamConfig) -> AudioSpec {
     let spec: AudioSpec = AudioSpec::new(sample_rate, bps, channels, encoding);
     spec
 }
+
 pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
 
