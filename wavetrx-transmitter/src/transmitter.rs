@@ -13,7 +13,7 @@ use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::protocol::profile::ProtocolProfile;
-use wavetrx::protocol::tx::transmitter::Transmitter;
+use wavetrx::tx::transmitter::Transmitter;
 
 use wavetrx::consts::AUDIO_BPS;
 use wavetrx::consts::AUDIO_SR;

@@ -12,7 +12,7 @@ use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::protocol::profile::ProtocolProfile;
-use wavetrx::protocol::rx::receiver::LiveReceiver;
+use wavetrx::rx::receiver::LiveReceiver;
 
 use wavetrx::get_profile;
 

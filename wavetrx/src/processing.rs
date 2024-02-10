@@ -11,7 +11,7 @@ use crate::audio::types::AudioSpec;
 use crate::audio::types::SampleEncoding;
 use crate::audio::utils::save_audio;
 
-use crate::protocol::rx::spectrum::FourierMagnitude;
+use crate::rx::spectrum::FourierMagnitude;
 use crate::{
     BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT, MARKER_TONE_START,
     PULSE_LENGTH_US,

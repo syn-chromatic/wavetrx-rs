@@ -2,7 +2,9 @@ pub mod audio;
 pub mod consts;
 pub mod processing;
 pub mod protocol;
+pub mod rx;
 pub mod tests;
+pub mod tx;
 
 use crate::protocol::profile::Bits;
 use crate::protocol::profile::Markers;

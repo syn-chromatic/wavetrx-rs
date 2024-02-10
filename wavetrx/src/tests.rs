@@ -15,10 +15,10 @@ use crate::audio::types::AudioSpec;
 use crate::audio::types::SampleEncoding;
 
 use crate::protocol::profile::ProtocolProfile;
-use crate::protocol::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
-use crate::protocol::rx::spectrum::Normalizer;
-use crate::protocol::tx::transmitter::Transmitter;
 use crate::protocol::utils::bits_to_string;
+use crate::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
+use crate::rx::spectrum::Normalizer;
+use crate::tx::transmitter::Transmitter;
 
 use crate::audio::utils::save_audio;
 use crate::consts::{AUDIO_BPS, AUDIO_SR, MIN_FREQ_SEP};
