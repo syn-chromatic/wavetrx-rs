@@ -32,11 +32,11 @@ fn input(prompt: &str) -> String {
     input.trim().to_string()
 }
 
-fn transmit_string(string: &str, spec: &AudioSpec) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+fn transmit_string(
+    string: &str,
+    transmitter: &Transmitter,
+) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     let data: &[u8] = string.as_bytes();
-
-    let profile: ProtocolProfile = get_profile();
-    let transmitter: Transmitter = Transmitter::new(profile, spec);
     let result: Result<Vec<f32>, Box<dyn std::error::Error>> = transmitter.create(data);
 
     if let Err(err) = result {
@@ -68,18 +68,30 @@ pub fn get_mono_audio_spec_f32(config: &SupportedStreamConfig) -> AudioSpec {
     spec
 }
 
+pub fn display_profile(profile: &ProtocolProfile, spec: &AudioSpec) {
+    let min_freq_sep: f32 = profile.min_frequency_separation(spec);
+
+    println!("{:?}", profile);
+    println!("Min Freq Sep: {:?} Hz", min_freq_sep);
+    println!();
+}
+
 pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n[Transmitter]\n");
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
 
     let spec: AudioSpec = get_mono_audio_spec_f32(&config);
+    let profile: ProtocolProfile = get_profile();
+    display_profile(&profile, &spec);
+
+    let transmitter: Transmitter = Transmitter::new(profile, &spec);
+
     let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
     player.play()?;
 
-    println!("\n[Transmitter]\n");
-
     loop {
         let string: String = input("Input: ");
-        if let Ok(samples) = transmit_string(&string, &spec) {
+        if let Ok(samples) = transmit_string(&string, &transmitter) {
             let samples: NormSamples = NormSamples::from_norm(&samples);
             player.add_samples(samples);
 

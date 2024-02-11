@@ -20,15 +20,19 @@ use wavetrx::rx::receiver::LiveReceiver;
 
 use wavetrx::get_profile;
 
-pub fn print_config(config: &SupportedStreamConfig) {
+pub fn print_config(device: &Device, config: &SupportedStreamConfig) {
+    let name: String = device.name().unwrap();
     let channels: u16 = config.channels();
     let sample_rate: u32 = config.sample_rate().0;
     let sample_format: SampleFormat = config.sample_format();
     let bits_per_sample: u16 = (sample_format.sample_size() * 8) as u16;
+    println!("[Stream Device]");
+    println!("Device: {}", name);
     println!("Channels: {}", channels);
     println!("Sample Rate: {}", sample_rate);
     println!("Sample Size: {}", sample_format.sample_size());
     println!("Bits Per Sample: {}", bits_per_sample);
+    println!();
 }
 
 pub fn get_default_output_device(
@@ -51,16 +55,24 @@ pub fn get_mono_audio_spec_i32(config: &SupportedStreamConfig) -> AudioSpec {
     let spec: AudioSpec = AudioSpec::new(sample_rate, bps, channels, encoding);
     spec
 }
+
+pub fn display_profile(profile: &ProtocolProfile, spec: &AudioSpec) {
+    let min_freq_sep: f32 = profile.min_frequency_separation(spec);
+
+    println!("{:?}", profile);
+    println!("Min Freq Sep: {:?} Hz", min_freq_sep);
+    println!();
+}
+
 pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n[Live Receiver]\n");
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
-
-    println!("Output device: {}", device.name()?);
-    print_config(&config);
+    print_config(&device, &config);
 
     let spec: AudioSpec = get_mono_audio_spec_i32(&config);
-
     let profile: ProtocolProfile = get_profile();
+    display_profile(&profile, &spec);
+
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
 
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());

@@ -2,6 +2,8 @@ use std::ops::Div;
 use std::ops::Mul;
 use std::time::Duration;
 
+use crate::audio::types::AudioSpec;
+
 #[derive(Copy, Clone)]
 pub struct Frequency(f32);
 
@@ -156,5 +158,40 @@ impl ProtocolProfile {
             bits,
             pulses,
         }
+    }
+
+    pub fn min_frequency_separation(&self, spec: &AudioSpec) -> f32 {
+        let sample_rate: f32 = spec.sample_rate() as f32;
+        let tone_micros: f32 = self.pulses.tone.as_micros::<u128>() as f32;
+
+        let sample_size: f32 = (sample_rate * tone_micros) / 1e6;
+        let min_freq_sep: f32 = sample_rate / sample_size;
+        min_freq_sep
+    }
+}
+
+impl core::fmt::Debug for ProtocolProfile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[Profile]\n")?;
+        f.write_str("-Markers-\n")?;
+        f.write_str(&format!(
+            "Start: {:?} Hz\nEnd: {:?} Hz\nNext: {:?} Hz\n",
+            self.markers.start.0, self.markers.end.0, self.markers.next.0
+        ))?;
+
+        f.write_str("\n-Bits-\n")?;
+        f.write_str(&format!(
+            "High: {:?} Hz\nLow: {:?} Hz\n",
+            self.bits.high.0, self.bits.low.0
+        ))?;
+
+        f.write_str("\n-Pulses-\n")?;
+        f.write_str(&format!(
+            "Tone: {}μs\nGap: {}μs\n",
+            self.pulses.tone.0.as_micros(),
+            self.pulses.gap.0.as_micros()
+        ))?;
+
+        Ok(())
     }
 }
