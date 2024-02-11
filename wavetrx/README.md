@@ -1,7 +1,7 @@
 ## `⌽` WaveTrx Library
-```
-//
-```
+
+### `➢` Info
+Core library for WaveTrx
 
 ___
 ### `➢` License

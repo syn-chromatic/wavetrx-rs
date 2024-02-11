@@ -1,7 +1,7 @@
 ## `⌽` WaveTrx Receiver
 
 ### `➢` Info
-WaveTrx Receiver constantly listens to the default audio output device to detect messages and decode them.
+WaveTrx Receiver constantly listens to the default audio output device to detect messages and decode them
 
 ___
 ### `➢` License
