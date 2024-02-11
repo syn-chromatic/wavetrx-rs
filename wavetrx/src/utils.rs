@@ -85,7 +85,7 @@ pub fn bits_to_string(bits: &Vec<u8>) -> String {
     string
 }
 
-fn save_normalized(samples: &[f32], spec: &AudioSpec) {
+pub fn save_normalized(samples: &[f32], spec: &AudioSpec) {
     let bit_depth: usize = spec.bits_per_sample() as usize;
     let mut samples: Vec<f32> = samples.to_vec();
     let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples);

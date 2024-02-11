@@ -8,7 +8,7 @@ use rustfft::Fft;
 use rustfft::FftPlanner;
 
 use crate::audio::types::AudioSpec;
-use crate::audio::utils::get_bit_depth_magnitudes;
+use crate::utils::get_bit_depth_magnitudes;
 
 pub struct FourierMagnitude {
     fft: Arc<dyn Fft<f32>>,

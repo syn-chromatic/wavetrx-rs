@@ -26,8 +26,8 @@ use wavetrx::utils::bits_to_string;
 use wavetrx::utils::read_file;
 use wavetrx::utils::read_wav_file;
 
-use wavetrx::audio::utils::save_audio;
 use wavetrx::utils::get_default_profile;
+use wavetrx::utils::save_audio;
 
 fn input(prompt: &str) -> String {
     let mut input: String = String::new();

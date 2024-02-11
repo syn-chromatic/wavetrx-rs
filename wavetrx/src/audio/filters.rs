@@ -86,7 +86,7 @@ impl<'a> FrequencyPass<'a> {
 fn test_function() {
     use super::types::NormSamples;
     use super::types::SampleEncoding;
-    use super::utils::save_audio;
+    use crate::utils::save_audio;
     use hound::WavReader;
     use std::fs::File;
     use std::io::BufReader;
