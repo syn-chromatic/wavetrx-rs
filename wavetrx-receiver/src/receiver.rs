@@ -12,7 +12,7 @@ use cpal::traits::HostTrait;
 use wavetrx::audio::recorder::InputRecorder;
 
 use wavetrx::audio::types::AudioSpec;
-use wavetrx::audio::types::FrameF32;
+use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::protocol::profile::ProtocolProfile;
@@ -69,15 +69,15 @@ pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n[Messages]");
 
     loop {
-        if let Some(frame) = recorder.take_frame() {
-            let mut sc_frame: FrameF32 = FrameF32::new();
-            for (idx, sample) in frame.samples.iter().enumerate() {
+        if let Some(samples) = recorder.take_frame() {
+            let mut sc_samples: NormSamples = NormSamples::new();
+            for (idx, sample) in samples.0.iter().enumerate() {
                 if idx % 2 == 0 {
-                    sc_frame.samples.push(*sample);
+                    sc_samples.0.push(*sample);
                 }
             }
 
-            live_receiver.add_frame(&mut sc_frame);
+            live_receiver.add_samples(&mut sc_samples);
             continue;
         }
         sleep(Duration::from_millis(50));

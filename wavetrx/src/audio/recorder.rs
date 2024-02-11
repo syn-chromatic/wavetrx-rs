@@ -11,7 +11,7 @@ use cpal::StreamConfig;
 use cpal::StreamError;
 
 use super::types::FrameBuffer;
-use super::types::FrameF32;
+use super::types::NormSamples;
 
 pub struct InputRecorder {
     device: Device,
@@ -39,7 +39,7 @@ impl InputRecorder {
         Ok(())
     }
 
-    pub fn take_frame(&mut self) -> Option<FrameF32> {
+    pub fn take_frame(&mut self) -> Option<NormSamples> {
         self.buffer.take()
     }
 }
@@ -47,7 +47,7 @@ impl InputRecorder {
 impl InputRecorder {
     fn data_callback(buffer: Arc<FrameBuffer>) -> impl Fn(&[f32], &InputCallbackInfo) {
         let callback = move |data: &[f32], _: &InputCallbackInfo| {
-            let frame: FrameF32 = FrameF32::from_f32(data);
+            let frame: NormSamples = NormSamples::from_norm(data);
             buffer.add_frame(frame);
         };
         callback

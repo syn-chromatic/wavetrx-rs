@@ -6,7 +6,6 @@ use biquad::ToHertz;
 use biquad::Type;
 
 use super::types::AudioSpec;
-use super::utils::get_bit_depth_magnitudes;
 
 pub struct FrequencyPass<'a> {
     samples: &'a mut [f32],
@@ -75,22 +74,18 @@ impl<'a> FrequencyPass<'a> {
     }
 
     fn apply_coefficients(&mut self, coefficients: Coefficients<f32>) {
-        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(self.spec);
         let mut filter: DirectForm1<f32> = DirectForm1::<f32>::new(coefficients);
 
         for sample in self.samples.iter_mut() {
             *sample = filter.run(*sample);
-            if sample.is_sign_positive() && *sample > p_magnitude {
-                *sample = p_magnitude;
-            } else if sample.is_sign_negative() && *sample < n_magnitude {
-                *sample = n_magnitude;
-            }
         }
     }
 }
 
 #[test]
 fn test_function() {
+    use super::types::NormSamples;
+    use super::types::SampleEncoding;
     use super::utils::save_audio;
     use hound::WavReader;
     use std::fs::File;
@@ -99,19 +94,24 @@ fn test_function() {
     let filename: &str = "sweep_h.wav";
     let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
     let spec: AudioSpec = reader.spec().into();
+
+    println!("{:?}", spec);
+
     // let encoding = spec.encoding();
 
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-    let mut samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
+    let mut samples: NormSamples = NormSamples::from_i32(&samples, &spec);
 
     let highpass_frequency: f32 = 1000.0;
-    let lowpass_frequency: f32 = 1000.0;
+    let lowpass_frequency: f32 = 5000.0;
 
-    let mut filters: FrequencyPass<'_> = FrequencyPass::new(&mut samples, &spec);
+    let mut filters: FrequencyPass<'_> = FrequencyPass::new(&mut samples.0, &spec);
+    let spec: AudioSpec =
+        AudioSpec::new(spec.sample_rate(), 32, spec.channels(), SampleEncoding::F32);
 
-    // filters.apply_highpass(highpass_frequency, 1.0);
-    // filters.apply_lowpass(lowpass_frequency, 0.707);
-    filters.apply_bandpass(5000.0, 10_000.0, 1.0);
+    filters.apply_highpass(highpass_frequency, 1.0);
+    filters.apply_lowpass(lowpass_frequency, 0.707);
+    // filters.apply_bandpass(5000.0, 10_000.0, 1.0);
 
-    save_audio("test_filters1.wav", &samples, &spec);
+    save_audio("test_filters1.wav", &samples.0, &spec);
 }

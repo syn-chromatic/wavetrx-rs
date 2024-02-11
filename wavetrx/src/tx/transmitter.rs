@@ -20,9 +20,8 @@ impl Transmitter {
         Transmitter { profile, spec }
     }
 
-    pub fn create(&self, data: &[u8]) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
-        let spec: WavSpec = self.spec.into();
-        let mut tone: ToneGenerator = ToneGenerator::new(spec)?;
+    pub fn create(&self, data: &[u8]) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+        let mut tone: ToneGenerator = ToneGenerator::new(self.spec)?;
         let fade_ratio: f32 = 0.1;
 
         self.append_silence(&mut tone)?;
@@ -44,9 +43,9 @@ impl Transmitter {
         filename: &str,
         data: &[u8],
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let spec: WavSpec = self.spec.into();
-        let samples: Vec<i32> = self.create(data)?;
+        let samples: Vec<f32> = self.create(data)?;
 
+        let spec: WavSpec = self.spec.into();
         let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
         for sample in samples {
             writer.write_sample(sample)?;

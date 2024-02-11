@@ -1,31 +1,21 @@
 use std::f32::consts;
 
-use hound;
-use hound::WavSpec;
-
-use crate::audio::utils::get_bit_depth_magnitudes;
+use crate::audio::types::AudioSpec;
 
 pub struct ToneGenerator {
-    samples: Vec<i32>,
-    spec: WavSpec,
-    p_magnitude: f32,
-    n_magnitude: f32,
+    samples: Vec<f32>,
+    spec: AudioSpec,
 }
 
 impl ToneGenerator {
-    pub fn new(spec: WavSpec) -> Result<Self, Box<dyn std::error::Error>> {
-        let samples: Vec<i32> = Vec::new();
-        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(&spec);
-        let tone_generator: ToneGenerator = ToneGenerator {
-            samples,
-            spec,
-            p_magnitude,
-            n_magnitude,
-        };
+    pub fn new(spec: AudioSpec) -> Result<Self, Box<dyn std::error::Error>> {
+        let samples: Vec<f32> = Vec::new();
+
+        let tone_generator: ToneGenerator = ToneGenerator { samples, spec };
         Ok(tone_generator)
     }
 
-    pub fn samples(self) -> Vec<i32> {
+    pub fn samples(self) -> Vec<f32> {
         self.samples
     }
 
@@ -34,14 +24,14 @@ impl ToneGenerator {
         frequency: f32,
         duration: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let sample_rate: usize = self.spec.sample_rate as usize;
+        let sample_rate: usize = self.spec.sample_rate() as usize;
 
         let sample_size: usize = (sample_rate * duration) / 1_000_000;
         let period: f32 = sample_rate as f32 / frequency;
 
         for idx in 0..sample_size {
-            let sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
-            self.samples.push(sine_magnitude as i32);
+            let sine_norm: f32 = self.get_sine_norm(idx, period);
+            self.samples.push(sine_norm);
         }
 
         Ok(())
@@ -53,16 +43,15 @@ impl ToneGenerator {
         duration: usize,
         fade_ratio: f32,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let sample_rate: usize = self.spec.sample_rate as usize;
+        let sample_rate: usize = self.spec.sample_rate() as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
         let period: f32 = sample_rate as f32 / frequency;
         let fade_size: usize = (sample_size as f32 * fade_ratio) as usize;
 
         for idx in 0..sample_size {
-            let mut sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
-            let fade_coefficient: f32 = self.get_sine_fade_coeff(idx, sample_size, fade_size);
-            sine_magnitude *= fade_coefficient;
-            self.samples.push(sine_magnitude as i32);
+            let mut sine_norm: f32 = self.get_sine_norm(idx, period);
+            sine_norm *= self.get_sine_fade_coeff(idx, sample_size, fade_size);
+            self.samples.push(sine_norm);
         }
 
         Ok(())
@@ -74,16 +63,15 @@ impl ToneGenerator {
         duration: usize,
         fade_ratio: f32,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let sample_rate: usize = self.spec.sample_rate as usize;
+        let sample_rate: usize = self.spec.sample_rate() as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
         let period: f32 = sample_rate as f32 / frequency;
         let fade_size: usize = (sample_size as f32 * fade_ratio) as usize;
 
         for idx in 0..sample_size {
-            let mut sine_magnitude: f32 = self.get_sine_magnitude(idx, period);
-            let fade_coefficient: f32 = self.get_linear_fade_coeff(idx, sample_size, fade_size);
-            sine_magnitude *= fade_coefficient;
-            self.samples.push(sine_magnitude as i32);
+            let mut sine_norm: f32 = self.get_sine_norm(idx, period);
+            sine_norm *= self.get_linear_fade_coeff(idx, sample_size, fade_size);
+            self.samples.push(sine_norm);
         }
 
         Ok(())
@@ -91,12 +79,8 @@ impl ToneGenerator {
 }
 
 impl ToneGenerator {
-    fn get_sine_magnitude(&self, idx: usize, period: f32) -> f32 {
-        let sine_norm: f32 = (2.0 * consts::PI * idx as f32 / period).sin();
-        if sine_norm.is_sign_positive() {
-            return sine_norm * self.p_magnitude;
-        }
-        sine_norm * self.n_magnitude.abs()
+    fn get_sine_norm(&self, idx: usize, period: f32) -> f32 {
+        (2.0 * consts::PI * idx as f32 / period).sin()
     }
 
     fn get_sine_fade_coeff(&self, idx: usize, sample_size: usize, fade_size: usize) -> f32 {

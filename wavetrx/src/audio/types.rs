@@ -4,35 +4,48 @@ use std::sync::RwLock;
 use hound::WavSpec;
 use std::collections::LinkedList;
 
-pub struct FrameF32 {
-    pub samples: Vec<f32>,
-}
+pub struct NormSamples(pub Vec<f32>);
 
-impl FrameF32 {
-    fn i32_to_f32(sample: i32) -> f32 {
-        (sample as f32) / (i32::MAX as f32)
+impl NormSamples {
+    fn i32_to_f32(sample: i32, spec: &AudioSpec) -> f32 {
+        match spec.bits_per_sample() {
+            16 => (sample as f32) / (i16::MAX as f32),
+            32 => (sample as f32) / (i32::MAX as f32),
+            _ => panic!("Unsupported Bits-Per-Sample while normalizing"),
+        }
     }
 }
 
-impl FrameF32 {
+impl NormSamples {
     pub fn new() -> Self {
         let samples: Vec<f32> = Vec::new();
-        Self { samples }
+        Self { 0: samples }
     }
 
-    pub fn from_f32(samples: &[f32]) -> Self {
+    pub fn from_norm(samples: &[f32]) -> Self {
         let samples: Vec<f32> = samples.to_vec();
-        Self { samples }
+        Self { 0: samples }
     }
 
-    pub fn from_i32(samples_i32: &[i32]) -> Self {
+    pub fn from_i32(samples_i32: &[i32], spec: &AudioSpec) -> Self {
         let mut samples: Vec<f32> = Vec::with_capacity(samples_i32.len());
 
         for sample in samples_i32.iter() {
-            let sample: f32 = Self::i32_to_f32(*sample);
+            let sample: f32 = Self::i32_to_f32(*sample, spec);
             samples.push(sample);
         }
-        Self { samples }
+        Self { 0: samples }
+    }
+
+    pub fn add_norm(&mut self, samples: &[f32]) {
+        self.0.extend(samples);
+    }
+
+    pub fn add_i32(&mut self, samples_i32: &[i32], spec: &AudioSpec) {
+        for sample in samples_i32.iter() {
+            let sample: f32 = Self::i32_to_f32(*sample, spec);
+            self.0.push(sample);
+        }
     }
 }
 
@@ -77,23 +90,43 @@ impl AudioSpec {
     }
 }
 
+impl std::fmt::Debug for SampleEncoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::F32 => write!(f, "F32"),
+            Self::I32 => write!(f, "I32"),
+        }
+    }
+}
+
+impl std::fmt::Debug for AudioSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudioSpec")
+            .field("sr", &self.sr)
+            .field("bps", &self.bps)
+            .field("channels", &self.channels)
+            .field("encoding", &self.encoding)
+            .finish()
+    }
+}
+
 pub struct FrameBuffer {
-    buffer: RwLock<LinkedList<FrameF32>>,
+    buffer: RwLock<LinkedList<NormSamples>>,
 }
 
 impl FrameBuffer {
     pub fn new() -> Arc<Self> {
-        let buffer: RwLock<LinkedList<FrameF32>> = RwLock::new(LinkedList::new());
+        let buffer: RwLock<LinkedList<NormSamples>> = RwLock::new(LinkedList::new());
         Arc::new(Self { buffer })
     }
 
-    pub fn add_frame(self: &Arc<Self>, frame: FrameF32) {
+    pub fn add_frame(self: &Arc<Self>, frame: NormSamples) {
         if let Ok(mut buffer_guard) = self.buffer.write() {
             buffer_guard.push_back(frame);
         }
     }
 
-    pub fn take(self: &Arc<Self>) -> Option<FrameF32> {
+    pub fn take(self: &Arc<Self>) -> Option<NormSamples> {
         if let Ok(mut buffer_guard) = self.buffer.write() {
             return buffer_guard.pop_front();
         }
@@ -117,9 +150,9 @@ impl SampleBuffer {
         }
     }
 
-    pub fn add_frame(self: &Arc<Self>, frame: FrameF32) {
+    pub fn add_samples(self: &Arc<Self>, samples: NormSamples) {
         if let Ok(mut buffer_guard) = self.buffer.write() {
-            for sample in frame.samples {
+            for sample in samples.0 {
                 buffer_guard.push_back(sample);
             }
         }

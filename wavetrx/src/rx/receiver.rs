@@ -2,7 +2,8 @@ use std::fs::File;
 use std::io::BufReader;
 
 use hound;
-use hound::{WavReader, WavSpec};
+use hound::WavReader;
+use hound::WavSpec;
 
 use super::resolver::RxResolver;
 use super::spectrum::{FourierMagnitude, Normalizer};
@@ -10,7 +11,7 @@ use super::states::{RxMagnitudes, RxOutput};
 
 use crate::audio::filters::FrequencyPass;
 use crate::audio::types::AudioSpec;
-use crate::audio::types::FrameF32;
+use crate::audio::types::NormSamples;
 use crate::audio::utils::save_audio;
 
 use crate::protocol::profile::ProtocolProfile;
@@ -30,28 +31,28 @@ impl Receiver {
 
     pub fn from_file(&self, filename: &str) -> Option<Vec<u8>> {
         let (mut samples, spec) = self.read_file(filename);
-        let spec: AudioSpec = spec.into();
         let tsz: usize = self.get_tone_sample_size(&spec);
         let gsz: usize = self.get_gap_sample_size(&spec);
 
-        println!("Samples: {}", samples.len());
+        println!("Samples: {}", samples.0.len());
         println!("Tone Sample Size: {}", tsz);
         println!("Gap Sample Size: {}", gsz);
 
-        self.apply_frequency_filters(&mut samples, &spec);
-        self.normalize_samples(&mut samples, &spec);
+        self.apply_frequency_filters(&mut samples.0, &spec);
+        self.normalize_samples(&mut samples.0, &spec);
 
         let freq_mag: FourierMagnitude = FourierMagnitude::new(tsz, &spec);
-        let start_index: Option<usize> = self.find_starting_index(&mut samples, tsz, &freq_mag);
+        let start_index: Option<usize> =
+            self.find_starting_index(&mut samples.0, tsz, &freq_mag);
         let sample_rate: usize = freq_mag.get_sample_rate();
 
         if let Some(idx) = start_index {
             let timestamp: f32 = self.get_timestamp(idx, sample_rate);
             println!("Start Index: {} | Timestamp: {:.3}", idx, timestamp);
             let (bits, output): (Vec<u8>, Option<RxOutput>) =
-                self.receive_bits(idx, tsz, gsz, &mut samples, &freq_mag);
+                self.receive_bits(idx, tsz, gsz, &mut samples.0, &freq_mag);
 
-            save_normalized(&samples, &spec);
+            save_normalized(&samples.0, &spec);
             if let Some(output) = output {
                 if output == RxOutput::End {
                     return Some(bits);
@@ -162,11 +163,13 @@ impl Receiver {
         }
     }
 
-    fn read_file(&self, filename: &str) -> (Vec<f32>, WavSpec) {
+    fn read_file(&self, filename: &str) -> (NormSamples, AudioSpec) {
         let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
+        let spec: AudioSpec = reader.spec().into();
+
         let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-        let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
-        let spec: WavSpec = reader.spec();
+        let samples: NormSamples = NormSamples::from_i32(&samples, &spec);
+
         (samples, spec)
     }
 
@@ -330,7 +333,7 @@ impl Receiver {
 
 pub struct LiveReceiver {
     profile: ProtocolProfile,
-    buffer: FrameF32,
+    buffer: NormSamples,
     bits: Vec<u8>,
     resolver: RxResolver,
     spec: AudioSpec,
@@ -342,7 +345,7 @@ pub struct LiveReceiver {
 
 impl LiveReceiver {
     pub fn new(profile: ProtocolProfile, spec: AudioSpec) -> Self {
-        let buffer: FrameF32 = FrameF32::new();
+        let buffer: NormSamples = NormSamples::new();
         let bits: Vec<u8> = Vec::new();
         let resolver: RxResolver = RxResolver::new();
         let sample_rate: usize = spec.sample_rate() as usize;
@@ -363,7 +366,7 @@ impl LiveReceiver {
         }
     }
 
-    pub fn add_frame(&mut self, frame: &mut FrameF32) {
+    pub fn add_samples(&mut self, samples: &mut NormSamples) {
         let tsz: usize = self.get_tone_sample_size();
         let gsz: usize = self.get_gap_sample_size();
 
@@ -376,13 +379,13 @@ impl LiveReceiver {
 
         // self.apply_frequency_filters(samples);
         // self.normalize_samples(samples);
-        self.re_normalize_samples_chunk(&mut frame.samples);
-        self.buffer.samples.append(&mut frame.samples);
+        self.re_normalize_samples_chunk(&mut samples.0);
+        self.buffer.0.append(&mut samples.0);
 
         if self.start_idx.is_some() && self.start_signal {
             let mut idx: usize = self.start_idx.unwrap();
-            if self.buffer.samples.len() > idx + self.sample_size {
-                while idx + self.sample_size < self.buffer.samples.len() {
+            if self.buffer.0.len() > idx + self.sample_size {
+                while idx + self.sample_size < self.buffer.0.len() {
                     let output: Option<RxOutput> = self.receive_bits(idx);
                     if let Some(output) = output {
                         match output {
@@ -405,7 +408,7 @@ impl LiveReceiver {
                 }
             }
         } else {
-            if self.buffer.samples.len() >= self.sample_size * 8 {
+            if self.buffer.0.len() >= self.sample_size * 8 {
                 let start_idx: Option<usize> = self.find_starting_index();
                 if start_idx.is_some() {
                     self.start_idx = start_idx;
@@ -423,7 +426,7 @@ impl LiveReceiver {
     }
 
     pub fn save(&self, filename: &str) {
-        save_normalized_name(filename, &self.buffer.samples, &self.spec);
+        save_normalized_name(filename, &self.buffer.0, &self.spec);
     }
 }
 
@@ -440,16 +443,16 @@ impl LiveReceiver {
         if let Some(idx) = self.start_idx {
             self.drain_buffer_to_starting_index(idx)
         } else {
-            let idx: usize = self.buffer.samples.len() - (self.sample_size * 8);
+            let idx: usize = self.buffer.0.len() - (self.sample_size * 8);
             self.drain_buffer_to_starting_index(idx);
         }
     }
 
     fn drain_buffer_to_starting_index(&mut self, idx: usize) {
-        if idx < self.buffer.samples.len() {
-            self.buffer.samples.drain(..idx);
+        if idx < self.buffer.0.len() {
+            self.buffer.0.drain(..idx);
         } else {
-            self.buffer.samples.clear();
+            self.buffer.0.clear();
         }
     }
 
@@ -479,7 +482,7 @@ impl LiveReceiver {
         let skip_cycles: usize = 8;
         let sample_rate: usize = freq_mag.get_sample_rate();
         let sample_size: usize = self.sample_size;
-        let samples: &Vec<f32> = &self.buffer.samples;
+        let samples: &Vec<f32> = &self.buffer.0;
 
         while idx < (samples.len() - sample_size) {
             let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
@@ -559,7 +562,7 @@ impl LiveReceiver {
 
     fn receive_bits(&mut self, idx: usize) -> Option<RxOutput> {
         let samples_chunk: Vec<f32> =
-            self.get_owned_samples_chunk(&self.buffer.samples, idx, self.sample_size);
+            self.get_owned_samples_chunk(&self.buffer.0, idx, self.sample_size);
         let magnitudes: RxMagnitudes = self.get_magnitudes(&samples_chunk);
         let output: Option<RxOutput> = self.resolver.resolve(&magnitudes);
         output
@@ -650,8 +653,8 @@ impl LiveReceiver {
     }
 
     fn clamp_ending_index(&self, idx: usize) -> usize {
-        if idx > self.buffer.samples.len() {
-            return self.buffer.samples.len();
+        if idx > self.buffer.0.len() {
+            return self.buffer.0.len();
         }
         idx
     }

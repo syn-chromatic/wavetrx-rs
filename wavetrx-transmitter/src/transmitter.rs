@@ -11,7 +11,7 @@ use cpal::traits::HostTrait;
 use wavetrx::audio::player::OutputPlayer;
 
 use wavetrx::audio::types::AudioSpec;
-use wavetrx::audio::types::FrameF32;
+use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::protocol::profile::ProtocolProfile;
@@ -32,12 +32,12 @@ fn input(prompt: &str) -> String {
     input.trim().to_string()
 }
 
-fn transmit_string(string: &str, spec: &AudioSpec) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
+fn transmit_string(string: &str, spec: &AudioSpec) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
     let data: &[u8] = string.as_bytes();
 
     let profile: ProtocolProfile = get_profile();
     let transmitter: Transmitter = Transmitter::new(profile, spec);
-    let result: Result<Vec<i32>, Box<dyn std::error::Error>> = transmitter.create(data);
+    let result: Result<Vec<f32>, Box<dyn std::error::Error>> = transmitter.create(data);
 
     if let Err(err) = result {
         panic!("Error: Failed to generate data: {:?}", err);
@@ -80,7 +80,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let string: String = input("Input: ");
         if let Ok(samples) = transmit_string(&string, &spec) {
-            let samples: FrameF32 = FrameF32::from_i32(&samples);
+            let samples: NormSamples = NormSamples::from_norm(&samples);
             player.add_samples(samples);
 
             player.wait();
