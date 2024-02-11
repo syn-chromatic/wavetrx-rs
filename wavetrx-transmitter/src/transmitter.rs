@@ -12,6 +12,7 @@ use wavetrx::audio::player::OutputPlayer;
 
 use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::SampleEncoding;
+use wavetrx::audio::types::FrameF32;
 
 use wavetrx::protocol::profile::ProtocolProfile;
 use wavetrx::tx::transmitter::Transmitter;
@@ -79,10 +80,8 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let string: String = input("Input: ");
         if let Ok(samples) = transmit_string(&string, &spec) {
-            for sample in samples {
-                let sample = (sample as f32) / (i32::MAX as f32);
-                player.add_sample(sample);
-            }
+            let samples: FrameF32 = FrameF32::from_i32(&samples);
+            player.add_samples(samples);
 
             player.wait();
             println!();

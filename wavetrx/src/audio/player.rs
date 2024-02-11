@@ -12,6 +12,7 @@ use cpal::StreamError;
 
 use super::types::AudioSpec;
 use super::types::SampleBuffer;
+use super::types::FrameF32;
 
 pub struct OutputPlayer {
     device: Device,
@@ -43,7 +44,11 @@ impl OutputPlayer {
     }
 
     pub fn add_sample(&self, sample: f32) {
-        self.buffer.add(sample);
+        self.buffer.add_sample(sample);
+    }
+
+    pub fn add_samples(&self, samples: FrameF32) {
+        self.buffer.add_frame(samples);
     }
 
     pub fn wait(&self) {

@@ -2,7 +2,8 @@ use std::fs::File;
 use std::io::BufWriter;
 
 use hound;
-use hound::{SampleFormat, WavSpec, WavWriter};
+use hound::WavSpec;
+use hound::WavWriter;
 
 use super::tone::ToneGenerator;
 use crate::audio::types::AudioSpec;
@@ -20,7 +21,7 @@ impl Transmitter {
     }
 
     pub fn create(&self, data: &[u8]) -> Result<Vec<i32>, Box<dyn std::error::Error>> {
-        let spec: WavSpec = self.get_wave_spec();
+        let spec: WavSpec = self.spec.into();
         let mut tone: ToneGenerator = ToneGenerator::new(spec)?;
         let fade_ratio: f32 = 0.1;
 
@@ -43,7 +44,7 @@ impl Transmitter {
         filename: &str,
         data: &[u8],
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let spec: WavSpec = self.get_wave_spec();
+        let spec: WavSpec = self.spec.into();
         let samples: Vec<i32> = self.create(data)?;
 
         let mut writer: WavWriter<BufWriter<File>> = WavWriter::create(filename, spec)?;
@@ -56,16 +57,6 @@ impl Transmitter {
 }
 
 impl Transmitter {
-    fn get_wave_spec(&self) -> WavSpec {
-        let spec: WavSpec = WavSpec {
-            channels: 1,
-            sample_rate: self.spec.sample_rate(),
-            bits_per_sample: self.spec.bits_per_sample(),
-            sample_format: SampleFormat::Int,
-        };
-        spec
-    }
-
     fn append_byte(
         &self,
         tone: &mut ToneGenerator,

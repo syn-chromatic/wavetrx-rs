@@ -10,6 +10,7 @@ use super::states::{RxMagnitudes, RxOutput};
 
 use crate::audio::filters::FrequencyPass;
 use crate::audio::types::AudioSpec;
+use crate::audio::types::FrameF32;
 use crate::audio::utils::save_audio;
 
 use crate::protocol::profile::ProtocolProfile;
@@ -329,7 +330,7 @@ impl Receiver {
 
 pub struct LiveReceiver {
     profile: ProtocolProfile,
-    buffer: Vec<f32>,
+    buffer: FrameF32,
     bits: Vec<u8>,
     resolver: RxResolver,
     spec: AudioSpec,
@@ -341,7 +342,7 @@ pub struct LiveReceiver {
 
 impl LiveReceiver {
     pub fn new(profile: ProtocolProfile, spec: AudioSpec) -> Self {
-        let buffer: Vec<f32> = Vec::new();
+        let buffer: FrameF32 = FrameF32::new();
         let bits: Vec<u8> = Vec::new();
         let resolver: RxResolver = RxResolver::new();
         let sample_rate: usize = spec.sample_rate() as usize;
@@ -362,26 +363,26 @@ impl LiveReceiver {
         }
     }
 
-    pub fn append_sample(&mut self, sample: &mut [f32]) {
+    pub fn add_frame(&mut self, frame: &mut FrameF32) {
         let tsz: usize = self.get_tone_sample_size();
         let gsz: usize = self.get_gap_sample_size();
 
         // println!(
         //     "Buffer: {} | Buffer Time: {:.3} | ST: {:?}",
         //     self.buffer.len(),
-        //     self.get_timestamp(self.buffer.len(), self.spec.sample_rate as usize),
+        //     self.get_timestamp(self.buffer.len(), self.spec.sample_rate() as usize),
         //     self.start_idx,
         // );
 
         // self.apply_frequency_filters(samples);
         // self.normalize_samples(samples);
-        self.re_normalize_samples_chunk(sample);
-        self.buffer.append(&mut sample.to_vec());
+        self.re_normalize_samples_chunk(&mut frame.samples);
+        self.buffer.samples.append(&mut frame.samples);
 
         if self.start_idx.is_some() && self.start_signal {
             let mut idx: usize = self.start_idx.unwrap();
-            if self.buffer.len() > idx + self.sample_size {
-                while idx + self.sample_size < self.buffer.len() {
+            if self.buffer.samples.len() > idx + self.sample_size {
+                while idx + self.sample_size < self.buffer.samples.len() {
                     let output: Option<RxOutput> = self.receive_bits(idx);
                     if let Some(output) = output {
                         match output {
@@ -404,7 +405,7 @@ impl LiveReceiver {
                 }
             }
         } else {
-            if self.buffer.len() >= self.sample_size * 8 {
+            if self.buffer.samples.len() >= self.sample_size * 8 {
                 let start_idx: Option<usize> = self.find_starting_index();
                 if start_idx.is_some() {
                     self.start_idx = start_idx;
@@ -422,7 +423,7 @@ impl LiveReceiver {
     }
 
     pub fn save(&self, filename: &str) {
-        save_normalized_name(filename, &self.buffer, &self.spec);
+        save_normalized_name(filename, &self.buffer.samples, &self.spec);
     }
 }
 
@@ -439,16 +440,16 @@ impl LiveReceiver {
         if let Some(idx) = self.start_idx {
             self.drain_buffer_to_starting_index(idx)
         } else {
-            let idx: usize = self.buffer.len() - (self.sample_size * 8);
+            let idx: usize = self.buffer.samples.len() - (self.sample_size * 8);
             self.drain_buffer_to_starting_index(idx);
         }
     }
 
     fn drain_buffer_to_starting_index(&mut self, idx: usize) {
-        if idx < self.buffer.len() {
-            self.buffer.drain(..idx);
+        if idx < self.buffer.samples.len() {
+            self.buffer.samples.drain(..idx);
         } else {
-            self.buffer.clear();
+            self.buffer.samples.clear();
         }
     }
 
@@ -478,7 +479,7 @@ impl LiveReceiver {
         let skip_cycles: usize = 8;
         let sample_rate: usize = freq_mag.get_sample_rate();
         let sample_size: usize = self.sample_size;
-        let samples: &Vec<f32> = &self.buffer;
+        let samples: &Vec<f32> = &self.buffer.samples;
 
         while idx < (samples.len() - sample_size) {
             let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
@@ -558,7 +559,7 @@ impl LiveReceiver {
 
     fn receive_bits(&mut self, idx: usize) -> Option<RxOutput> {
         let samples_chunk: Vec<f32> =
-            self.get_owned_samples_chunk(&self.buffer, idx, self.sample_size);
+            self.get_owned_samples_chunk(&self.buffer.samples, idx, self.sample_size);
         let magnitudes: RxMagnitudes = self.get_magnitudes(&samples_chunk);
         let output: Option<RxOutput> = self.resolver.resolve(&magnitudes);
         output
@@ -649,8 +650,8 @@ impl LiveReceiver {
     }
 
     fn clamp_ending_index(&self, idx: usize) -> usize {
-        if idx > self.buffer.len() {
-            return self.buffer.len();
+        if idx > self.buffer.samples.len() {
+            return self.buffer.samples.len();
         }
         idx
     }

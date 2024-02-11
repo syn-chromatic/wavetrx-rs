@@ -3,6 +3,38 @@ use std::sync::RwLock;
 
 use std::collections::LinkedList;
 
+pub struct FrameF32 {
+    pub samples: Vec<f32>,
+}
+
+impl FrameF32 {
+    fn i32_to_f32(sample: i32) -> f32 {
+        (sample as f32) / (i32::MAX as f32)
+    }
+}
+
+impl FrameF32 {
+    pub fn new() -> Self {
+        let samples: Vec<f32> = Vec::new();
+        Self { samples }
+    }
+
+    pub fn from_f32(samples: &[f32]) -> Self {
+        let samples: Vec<f32> = samples.to_vec();
+        Self { samples }
+    }
+
+    pub fn from_i32(samples_i32: &[i32]) -> Self {
+        let mut samples: Vec<f32> = Vec::with_capacity(samples_i32.len());
+
+        for sample in samples_i32.iter() {
+            let sample: f32 = Self::i32_to_f32(*sample);
+            samples.push(sample);
+        }
+        Self { samples }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum SampleEncoding {
     F32,
@@ -45,22 +77,22 @@ impl AudioSpec {
 }
 
 pub struct FrameBuffer {
-    buffer: RwLock<LinkedList<Vec<f32>>>,
+    buffer: RwLock<LinkedList<FrameF32>>,
 }
 
 impl FrameBuffer {
     pub fn new() -> Arc<Self> {
-        let buffer: RwLock<LinkedList<Vec<f32>>> = RwLock::new(LinkedList::new());
+        let buffer: RwLock<LinkedList<FrameF32>> = RwLock::new(LinkedList::new());
         Arc::new(Self { buffer })
     }
 
-    pub fn add(self: &Arc<Self>, frame: Vec<f32>) {
+    pub fn add_frame(self: &Arc<Self>, frame: FrameF32) {
         if let Ok(mut buffer_guard) = self.buffer.write() {
             buffer_guard.push_back(frame);
         }
     }
 
-    pub fn take(self: &Arc<Self>) -> Option<Vec<f32>> {
+    pub fn take(self: &Arc<Self>) -> Option<FrameF32> {
         if let Ok(mut buffer_guard) = self.buffer.write() {
             return buffer_guard.pop_front();
         }
@@ -78,9 +110,17 @@ impl SampleBuffer {
         Arc::new(Self { buffer })
     }
 
-    pub fn add(self: &Arc<Self>, sample: f32) {
+    pub fn add_sample(self: &Arc<Self>, sample: f32) {
         if let Ok(mut buffer_guard) = self.buffer.write() {
             buffer_guard.push_back(sample);
+        }
+    }
+
+    pub fn add_frame(self: &Arc<Self>, frame: FrameF32) {
+        if let Ok(mut buffer_guard) = self.buffer.write() {
+            for sample in frame.samples {
+                buffer_guard.push_back(sample);
+            }
         }
     }
 
