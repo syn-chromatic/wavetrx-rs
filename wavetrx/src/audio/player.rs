@@ -11,8 +11,8 @@ use cpal::StreamConfig;
 use cpal::StreamError;
 
 use super::types::AudioSpec;
-use super::types::SampleBuffer;
 use super::types::NormSamples;
+use super::types::SampleBuffer;
 
 pub struct OutputPlayer {
     device: Device,
@@ -87,7 +87,13 @@ impl OutputPlayer {
         spec: Arc<AudioSpec>,
     ) -> impl FnMut(&mut [f32], &OutputCallbackInfo) {
         let callback = move |data: &mut [f32], _: &OutputCallbackInfo| {
-            //
+            // Sometimes the data buffer remains filled from previous frame
+            if data.iter().any(|&value| value > 0.0) {
+                for data in data.iter_mut() {
+                    *data = 0.0;
+                }
+            }
+
             if !buffer.buffer_empty() {
                 match spec.channels() {
                     1 => Self::append_mono(data, &buffer),
