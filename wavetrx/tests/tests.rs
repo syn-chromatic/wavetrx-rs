@@ -27,7 +27,7 @@ use wavetrx::utils::read_file;
 use wavetrx::utils::read_wav_file;
 
 use wavetrx::audio::utils::save_audio;
-use wavetrx::utils::get_profile;
+use wavetrx::utils::get_default_profile;
 
 fn input(prompt: &str) -> String {
     let mut input: String = String::new();
@@ -50,7 +50,7 @@ fn test_transmitter() {
 
     println!("Data: {:?}", data);
 
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
 
     let spec: AudioSpec = AudioSpec::new(48_000, 32, 1, SampleEncoding::F32);
     let transmitter: Transmitter = Transmitter::new(profile, &spec);
@@ -68,7 +68,7 @@ fn test_transmitter() {
 fn test_receiver() {
     let filename: &str = "transmitted_audio.wav";
 
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
     let receiver: Receiver = Receiver::new(profile);
 
     let bits: Option<Vec<u8>> = receiver.from_file(filename);
@@ -94,7 +94,7 @@ fn test_live_receiver() {
 
     let (mut samples, spec) = read_file(filename);
     let spec: AudioSpec = spec.into();
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
 
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
     let sample_size = live_receiver.get_sample_size();
@@ -136,7 +136,7 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
 
     let spec: AudioSpec = AudioSpec::new(sample_rate, 32, 1, SampleEncoding::I32);
 
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
     let recorded_samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
     let recorded_samples_arc: Arc<Mutex<Vec<f32>>> = recorded_samples.clone();
@@ -195,7 +195,7 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
 
     let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::I32);
 
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
 
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());
@@ -256,7 +256,7 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
 
     let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::I32);
 
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
 
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());

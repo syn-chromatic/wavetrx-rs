@@ -16,7 +16,7 @@ use wavetrx::audio::types::SampleEncoding;
 use wavetrx::profile::ProtocolProfile;
 use wavetrx::protocol::tx::Transmitter;
 
-use wavetrx::utils::get_profile;
+use wavetrx::utils::get_default_profile;
 
 fn input(prompt: &str) -> String {
     let mut input: String = String::new();
@@ -80,7 +80,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
 
     let spec: AudioSpec = get_mono_audio_spec_f32(&config);
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
     display_profile(&profile, &spec);
 
     let transmitter: Transmitter = Transmitter::new(profile, &spec);

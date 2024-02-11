@@ -17,7 +17,7 @@ use wavetrx::audio::types::SampleEncoding;
 use wavetrx::profile::ProtocolProfile;
 use wavetrx::protocol::rx::LiveReceiver;
 
-use wavetrx::utils::get_profile;
+use wavetrx::utils::get_default_profile;
 
 pub fn print_config(device: &Device, config: &SupportedStreamConfig) {
     let name: String = device.name().unwrap();
@@ -69,7 +69,7 @@ pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
     print_config(&device, &config);
 
     let spec: AudioSpec = get_mono_audio_spec_i32(&config);
-    let profile: ProtocolProfile = get_profile();
+    let profile: ProtocolProfile = get_default_profile();
     display_profile(&profile, &spec);
 
     let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
