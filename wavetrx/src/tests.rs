@@ -14,11 +14,14 @@ use crate::audio::recorder::InputRecorder;
 use crate::audio::types::AudioSpec;
 use crate::audio::types::SampleEncoding;
 
-use crate::protocol::profile::ProtocolProfile;
-use crate::protocol::utils::bits_to_string;
-use crate::rx::receiver::{save_normalized_name, LiveReceiver, Receiver};
-use crate::rx::spectrum::Normalizer;
-use crate::tx::transmitter::Transmitter;
+use crate::audio::spectrum::Normalizer;
+use crate::profile::ProtocolProfile;
+use crate::protocol::rx::LiveReceiver;
+use crate::protocol::rx::Receiver;
+use crate::utils::save_normalized_name;
+
+use crate::protocol::tx::Transmitter;
+use crate::utils::bits_to_string;
 
 use crate::audio::utils::save_audio;
 use crate::get_profile;

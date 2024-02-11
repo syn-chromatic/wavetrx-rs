@@ -1,15 +1,14 @@
 pub mod audio;
 pub mod consts;
-pub mod processing;
+pub mod profile;
 pub mod protocol;
-pub mod rx;
 pub mod tests;
-pub mod tx;
+pub mod utils;
 
-use crate::protocol::profile::Bits;
-use crate::protocol::profile::Markers;
-use crate::protocol::profile::ProtocolProfile;
-use crate::protocol::profile::Pulses;
+use crate::profile::Bits;
+use crate::profile::Markers;
+use crate::profile::ProtocolProfile;
+use crate::profile::Pulses;
 
 use crate::consts::{
     BIT_TONE_HIGH, BIT_TONE_LOW, MARKER_TONE_END, MARKER_TONE_NEXT, MARKER_TONE_START,

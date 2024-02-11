@@ -15,8 +15,8 @@ use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
 
-use wavetrx::protocol::profile::ProtocolProfile;
-use wavetrx::rx::receiver::LiveReceiver;
+use wavetrx::profile::ProtocolProfile;
+use wavetrx::protocol::rx::LiveReceiver;
 
 use wavetrx::get_profile;
 

@@ -5,20 +5,24 @@ use hound;
 use hound::WavReader;
 use hound::WavSpec;
 
+use super::resolver::RxMagnitudes;
+use super::resolver::RxOutput;
 use super::resolver::RxResolver;
-use super::spectrum::{FourierMagnitude, Normalizer};
-use super::states::{RxMagnitudes, RxOutput};
 
 use crate::audio::filters::FrequencyPass;
+use crate::audio::spectrum::FourierMagnitude;
+use crate::audio::spectrum::Normalizer;
 use crate::audio::types::AudioSpec;
 use crate::audio::types::NormSamples;
 use crate::audio::utils::save_audio;
 
-use crate::protocol::profile::ProtocolProfile;
-use crate::protocol::profile::PulseDuration;
-use crate::protocol::utils::bits_to_string;
+use crate::profile::ProtocolProfile;
+use crate::profile::PulseDuration;
+use crate::utils::bits_to_string;
 
-use crate::consts::{DB_THRESHOLD, HP_FILTER, LP_FILTER};
+use crate::consts::DB_THRESHOLD;
+use crate::consts::HP_FILTER;
+use crate::consts::LP_FILTER;
 
 pub struct Receiver {
     profile: ProtocolProfile,
@@ -42,8 +46,7 @@ impl Receiver {
         self.normalize_samples(&mut samples.0, &spec);
 
         let freq_mag: FourierMagnitude = FourierMagnitude::new(tsz, &spec);
-        let start_index: Option<usize> =
-            self.find_starting_index(&mut samples.0, tsz, &freq_mag);
+        let start_index: Option<usize> = self.find_starting_index(&mut samples.0, tsz, &freq_mag);
         let sample_rate: usize = freq_mag.get_sample_rate();
 
         if let Some(idx) = start_index {
@@ -264,6 +267,7 @@ impl Receiver {
             next_magnitude,
             high_magnitude,
             low_magnitude,
+            DB_THRESHOLD,
         );
 
         print_magnitude(&magnitudes);
@@ -627,6 +631,7 @@ impl LiveReceiver {
             next_magnitude,
             high_magnitude,
             low_magnitude,
+            DB_THRESHOLD,
         );
 
         // print_magnitude(&magnitudes);
@@ -674,32 +679,32 @@ impl LiveReceiver {
 fn print_magnitude(magnitudes: &RxMagnitudes) {
     let mut boolean: bool = false;
 
-    if magnitudes.within_range(magnitudes.start) {
+    if magnitudes.within_threshold(magnitudes.start) {
         print!("Start: {:.2} dB", magnitudes.start);
         boolean = true;
     }
-    if magnitudes.within_range(magnitudes.end) {
+    if magnitudes.within_threshold(magnitudes.end) {
         if boolean {
             print!(" | ");
         }
         print!("End: {:.2} dB", magnitudes.end);
         boolean = true;
     }
-    if magnitudes.within_range(magnitudes.high) {
+    if magnitudes.within_threshold(magnitudes.high) {
         if boolean {
             print!(" | ");
         }
         print!("High: {:.2} dB", magnitudes.high);
         boolean = true;
     }
-    if magnitudes.within_range(magnitudes.low) {
+    if magnitudes.within_threshold(magnitudes.low) {
         if boolean {
             print!(" | ");
         }
         print!("Low: {:.2} dB", magnitudes.low);
         boolean = true;
     }
-    if magnitudes.within_range(magnitudes.next) {
+    if magnitudes.within_threshold(magnitudes.next) {
         if boolean {
             print!(" | ");
         }

@@ -7,7 +7,7 @@ use hound::WavWriter;
 
 use super::tone::ToneGenerator;
 use crate::audio::types::AudioSpec;
-use crate::protocol::profile::ProtocolProfile;
+use crate::profile::ProtocolProfile;
 
 pub struct Transmitter {
     profile: ProtocolProfile,

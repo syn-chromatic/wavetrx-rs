@@ -1,6 +1,59 @@
-use super::states::RxMagnitudes;
-use super::states::RxOutput;
-use super::states::RxStates;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RxStates {
+    Start,
+    End,
+    Next,
+    Bit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RxOutput {
+    Bit(u8),
+    End,
+    Error,
+}
+
+pub struct RxMagnitudes {
+    pub start: f32,
+    pub end: f32,
+    pub next: f32,
+    pub high: f32,
+    pub low: f32,
+    pub threshold: f32,
+}
+
+impl RxMagnitudes {
+    pub fn new(start: f32, end: f32, next: f32, high: f32, low: f32, threshold: f32) -> Self {
+        RxMagnitudes {
+            start,
+            end,
+            next,
+            high,
+            low,
+            threshold,
+        }
+    }
+
+    pub fn within_threshold(&self, value: f32) -> bool {
+        value >= -self.threshold && value <= self.threshold
+    }
+
+    pub fn state_within_threshold(&self, state: &RxStates) -> bool {
+        match state {
+            RxStates::Start => self.within_threshold(self.start),
+            RxStates::End => self.within_threshold(self.end),
+            RxStates::Next => self.within_threshold(self.next),
+            RxStates::Bit => self.within_threshold(self.high) || self.within_threshold(self.low),
+        }
+    }
+
+    pub fn prominent_bit(&self) -> u8 {
+        if self.high > self.low {
+            return 1;
+        }
+        0
+    }
+}
 
 #[derive(Debug)]
 pub struct RxResolver {
@@ -26,7 +79,7 @@ impl RxResolver {
 
     pub fn resolve(&mut self, magnitudes: &RxMagnitudes) -> Option<RxOutput> {
         let end_evaluation: bool = self.evaluate_end(magnitudes);
-        let evaluation: bool = magnitudes.evaluate(&self.expectation);
+        let evaluation: bool = magnitudes.state_within_threshold(&self.expectation);
 
         let end_resolve: Option<RxOutput> =
             self.resolve_end(magnitudes, end_evaluation, evaluation);
@@ -40,7 +93,7 @@ impl RxResolver {
             if self.expectation == RxStates::Next {
                 if let Some(selection) = &self.selection {
                     if *selection == RxStates::Bit {
-                        let bit: u8 = magnitudes.get_bit();
+                        let bit: u8 = magnitudes.prominent_bit();
                         return Some(RxOutput::Bit(bit));
                     }
                 }
@@ -81,7 +134,7 @@ impl RxResolver {
     ) -> Option<RxOutput> {
         if !end_evaluation {
             if let Some(end_expectation) = &self.end_expectation {
-                let end_evaluation = magnitudes.evaluate(end_expectation);
+                let end_evaluation = magnitudes.state_within_threshold(end_expectation);
                 if end_evaluation && !evaluation {
                     return Some(RxOutput::End);
                 } else {
@@ -97,7 +150,7 @@ impl RxResolver {
         if self.expectation == RxStates::Bit {
             if let Some(selection) = &self.selection {
                 if *selection == RxStates::Bit {
-                    if magnitudes.evaluate(&RxStates::End) {
+                    if magnitudes.state_within_threshold(&RxStates::End) {
                         self.end_selection = Some(RxStates::End);
                         self.end_expectation = Some(RxStates::Next);
                         return true;
