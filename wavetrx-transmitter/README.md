@@ -1,7 +1,7 @@
 ## `⌽` WaveTrx Transmitter
-```
-//
-```
+
+### `➢` Info
+WaveTrx Transmitter uses the default audio output device to transmit messages through standard input (stdin).
 
 ___
 ### `➢` License
