@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use hound::WavSpec;
 use std::collections::LinkedList;
 
 pub struct FrameF32 {
@@ -136,5 +137,63 @@ impl SampleBuffer {
             return buffer_guard.is_empty();
         }
         false
+    }
+}
+
+pub trait Scalar {
+    fn to_i32(&self) -> i32;
+    fn to_f32(&self) -> f32;
+}
+
+impl Scalar for i32 {
+    fn to_i32(&self) -> i32 {
+        *self
+    }
+
+    fn to_f32(&self) -> f32 {
+        *self as f32
+    }
+}
+
+impl Scalar for f32 {
+    fn to_i32(&self) -> i32 {
+        *self as i32
+    }
+    fn to_f32(&self) -> f32 {
+        *self
+    }
+}
+
+pub trait IntoBitDepth {
+    fn into_bit_depth(self) -> u32;
+}
+
+impl IntoBitDepth for usize {
+    fn into_bit_depth(self) -> u32 {
+        self as u32
+    }
+}
+
+impl IntoBitDepth for WavSpec {
+    fn into_bit_depth(self) -> u32 {
+        self.bits_per_sample as u32
+    }
+}
+
+impl IntoBitDepth for &WavSpec {
+    fn into_bit_depth(self) -> u32 {
+        self.bits_per_sample as u32
+    }
+}
+
+impl IntoBitDepth for AudioSpec {
+    fn into_bit_depth(self) -> u32 {
+        self.bits_per_sample() as u32
+    }
+}
+
+impl IntoBitDepth for &AudioSpec {
+    fn into_bit_depth(self) -> u32 {
+        self.bits_per_sample() as u32
     }
 }

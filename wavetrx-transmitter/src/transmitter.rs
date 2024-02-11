@@ -11,8 +11,8 @@ use cpal::traits::HostTrait;
 use wavetrx::audio::player::OutputPlayer;
 
 use wavetrx::audio::types::AudioSpec;
-use wavetrx::audio::types::SampleEncoding;
 use wavetrx::audio::types::FrameF32;
+use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::protocol::profile::ProtocolProfile;
 use wavetrx::tx::transmitter::Transmitter;
@@ -75,7 +75,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
     player.play()?;
 
-    println!("[Transmitter]");
+    println!("\n[Transmitter]\n");
 
     loop {
         let string: String = input("Input: ");

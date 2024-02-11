@@ -52,6 +52,7 @@ pub fn get_mono_audio_spec_i32(config: &SupportedStreamConfig) -> AudioSpec {
     spec
 }
 pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n[Live Receiver]\n");
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
 
     println!("Output device: {}", device.name()?);
@@ -65,7 +66,7 @@ pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());
     recorder.record()?;
 
-    println!("\n[Live Receiver]");
+    println!("\n[Messages]");
 
     loop {
         if let Some(frame) = recorder.take_frame() {
