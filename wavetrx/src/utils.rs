@@ -1,12 +1,38 @@
-use hound::{WavSpec, WavWriter};
 use std::fs::File;
+use std::io::BufReader;
 use std::io::BufWriter;
+
+use hound::WavReader;
+use hound::WavSpec;
+use hound::WavWriter;
 
 use crate::audio::spectrum::Normalizer;
 use crate::audio::types::AudioSpec;
 use crate::audio::types::IntoBitDepth;
 use crate::audio::types::SampleEncoding;
 use crate::audio::types::Scalar;
+
+use crate::profile::Bits;
+use crate::profile::Markers;
+use crate::profile::ProtocolProfile;
+use crate::profile::Pulses;
+
+use crate::consts::BIT_TONE_HIGH;
+use crate::consts::BIT_TONE_LOW;
+use crate::consts::MARKER_TONE_END;
+use crate::consts::MARKER_TONE_NEXT;
+use crate::consts::MARKER_TONE_START;
+use crate::consts::PULSE_GAP_US;
+use crate::consts::PULSE_LENGTH_US;
+
+pub fn get_profile() -> ProtocolProfile {
+    let markers: Markers = Markers::new(MARKER_TONE_START, MARKER_TONE_END, MARKER_TONE_NEXT);
+    let bits: Bits = Bits::new(BIT_TONE_HIGH, BIT_TONE_LOW);
+    let pulses: Pulses = Pulses::new(PULSE_LENGTH_US, PULSE_GAP_US);
+
+    let profile: ProtocolProfile = ProtocolProfile::new(markers, bits, pulses);
+    profile
+}
 
 pub fn get_bit_depth_magnitudes<T: IntoBitDepth>(source: T) -> (f32, f32) {
     let bit_depth: u32 = source.into_bit_depth();
@@ -74,4 +100,23 @@ pub fn save_normalized_name(filename: &str, samples: &[f32], spec: &AudioSpec) {
     normalizer.de_normalize(bit_depth);
     let samples: Vec<i32> = normalizer.to_i32();
     save_audio(filename, &samples, spec);
+}
+
+pub fn read_file(filename: &str) -> (Vec<f32>, WavSpec) {
+    let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
+    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
+    let spec: WavSpec = reader.spec();
+    (samples, spec)
+}
+
+pub fn read_wav_file(file_path: &str) -> (Vec<f32>, WavSpec) {
+    let mut reader: WavReader<BufReader<File>> = hound::WavReader::open(file_path).unwrap();
+    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    let samples: Vec<f32> = samples
+        .iter()
+        .map(|&s| (s as f32) / (i32::MAX as f32))
+        .collect();
+    let spec: WavSpec = reader.spec();
+    (samples, spec)
 }

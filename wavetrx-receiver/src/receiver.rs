@@ -10,7 +10,6 @@ use cpal::traits::DeviceTrait;
 use cpal::traits::HostTrait;
 
 use wavetrx::audio::recorder::InputRecorder;
-
 use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
@@ -18,7 +17,7 @@ use wavetrx::audio::types::SampleEncoding;
 use wavetrx::profile::ProtocolProfile;
 use wavetrx::protocol::rx::LiveReceiver;
 
-use wavetrx::get_profile;
+use wavetrx::utils::get_profile;
 
 pub fn print_config(device: &Device, config: &SupportedStreamConfig) {
     let name: String = device.name().unwrap();
