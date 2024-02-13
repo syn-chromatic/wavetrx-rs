@@ -1,10 +1,3 @@
-use std::fs::File;
-use std::io::BufReader;
-
-use hound;
-use hound::WavReader;
-use hound::WavSpec;
-
 use super::resolver::RxMagnitudes;
 use super::resolver::RxOutput;
 use super::resolver::RxResolver;
@@ -241,14 +234,6 @@ impl LiveReceiver {
         } else {
             *idx += 1;
         }
-    }
-
-    fn read_file(&self, filename: &str) -> (Vec<f32>, WavSpec) {
-        let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-        let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-        let samples: Vec<f32> = samples.iter().map(|&sample| sample as f32).collect();
-        let spec: WavSpec = reader.spec();
-        (samples, spec)
     }
 
     fn receive_bits(&mut self, idx: usize) -> Option<RxOutput> {
