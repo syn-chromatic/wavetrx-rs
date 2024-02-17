@@ -7,15 +7,15 @@ use hound::WavWriter;
 
 use super::tone::ToneGenerator;
 use crate::audio::types::AudioSpec;
-use crate::profile::ProtocolProfile;
+use crate::protocol::profile::Profile;
 
 pub struct Transmitter {
-    profile: ProtocolProfile,
+    profile: Profile,
     spec: AudioSpec,
 }
 
 impl Transmitter {
-    pub fn new(profile: ProtocolProfile, spec: &AudioSpec) -> Self {
+    pub fn new(profile: Profile, spec: &AudioSpec) -> Self {
         let spec: AudioSpec = spec.clone();
         Transmitter { profile, spec }
     }

@@ -138,22 +138,62 @@ pub struct Pulses {
 }
 
 impl Pulses {
+    fn get_tone_sample_size(&self, spec: &AudioSpec) -> usize {
+        let sample_rate: usize = spec.sample_rate() as usize;
+        let sample_size: usize = self.tone.sample_size::<usize>(sample_rate);
+        sample_size
+    }
+
+    fn get_gap_sample_size(&self, spec: &AudioSpec) -> usize {
+        let sample_rate: usize = spec.sample_rate() as usize;
+        let sample_size: usize = self.gap.sample_size::<usize>(sample_rate);
+        sample_size
+    }
+}
+
+impl Pulses {
     pub fn new(tone: Duration, gap: Duration) -> Self {
         let tone: PulseDuration = tone.into();
         let gap: PulseDuration = gap.into();
         Self { tone, gap }
     }
+
+    pub fn into_sized(&self, spec: &AudioSpec) -> SizedPulses {
+        let tone_size: usize = self.get_tone_sample_size(spec);
+        let gap_size: usize = self.get_gap_sample_size(spec);
+
+        SizedPulses {
+            tone_size,
+            gap_size,
+        }
+    }
 }
 
-pub struct ProtocolProfile {
+#[derive(Clone, Copy)]
+pub struct SizedPulses {
+    tone_size: usize,
+    gap_size: usize,
+}
+
+impl SizedPulses {
+    pub fn tone_size(&self) -> usize {
+        self.tone_size
+    }
+
+    pub fn gap_size(&self) -> usize {
+        self.gap_size
+    }
+}
+
+pub struct Profile {
     pub markers: Markers,
     pub bits: Bits,
     pub pulses: Pulses,
 }
 
-impl ProtocolProfile {
+impl Profile {
     pub fn new(markers: Markers, bits: Bits, pulses: Pulses) -> Self {
-        ProtocolProfile {
+        Profile {
             markers,
             bits,
             pulses,
@@ -170,7 +210,7 @@ impl ProtocolProfile {
     }
 }
 
-impl core::fmt::Debug for ProtocolProfile {
+impl core::fmt::Debug for Profile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("[Profile]\n")?;
         f.write_str("-Markers-\n")?;

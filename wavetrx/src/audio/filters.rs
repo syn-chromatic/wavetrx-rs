@@ -40,21 +40,12 @@ impl<'a> FrequencyPass<'a> {
         let mut q_value: f32 = center_frequency / (upper_frequency - lower_frequency);
         q_value *= sharpness;
 
-        for _ in 0..4 {
-            let coefficients: Result<Coefficients<f32>, biquad::Errors> =
-                self.get_coefficients(Type::BandPass, center_frequency, q_value);
+        let coefficients: Result<Coefficients<f32>, biquad::Errors> =
+            self.get_coefficients(Type::BandPass, center_frequency, q_value);
 
-            if let Ok(coefficients) = coefficients {
-                self.apply_coefficients(coefficients);
-            }
+        if let Ok(coefficients) = coefficients {
+            self.apply_coefficients(coefficients);
         }
-
-        // let coefficients: Result<Coefficients<f32>, biquad::Errors> =
-        //     self.get_coefficients(Type::BandPass, center_frequency, q_value);
-
-        // if let Ok(coefficients) = coefficients {
-        //     self.apply_coefficients(coefficients);
-        // }
     }
 }
 
@@ -86,7 +77,6 @@ impl<'a> FrequencyPass<'a> {
 fn test_function() {
     use super::types::NormSamples;
     use super::types::SampleEncoding;
-    use crate::utils::save_audio;
     use hound::WavReader;
     use std::fs::File;
     use std::io::BufReader;
@@ -96,8 +86,6 @@ fn test_function() {
     let spec: AudioSpec = reader.spec().into();
 
     println!("{:?}", spec);
-
-    // let encoding = spec.encoding();
 
     let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
     let mut samples: NormSamples = NormSamples::from_i32(&samples, &spec);
@@ -111,7 +99,7 @@ fn test_function() {
 
     filters.apply_highpass(highpass_frequency, 1.0);
     filters.apply_lowpass(lowpass_frequency, 0.707);
-    // filters.apply_bandpass(5000.0, 10_000.0, 1.0);
+    // filters.apply_bandpass(5000.0, 10_000.0, 2.0);
 
-    save_audio("test_filters1.wav", &samples.0, &spec);
+    samples.save_file("test_filters2.wav", &spec);
 }

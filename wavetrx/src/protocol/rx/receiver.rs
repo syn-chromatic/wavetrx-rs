@@ -1,137 +1,213 @@
-use std::fs::File;
-use std::io::BufReader;
-
-use hound;
-use hound::WavReader;
+use std::path::Path;
 
 use super::resolver::RxMagnitudes;
 use super::resolver::RxOutput;
 use super::resolver::RxResolver;
 
-use crate::audio::filters::FrequencyPass;
 use crate::audio::spectrum::FourierMagnitude;
 use crate::audio::spectrum::Normalizer;
 use crate::audio::types::AudioSpec;
 use crate::audio::types::NormSamples;
 
-use crate::profile::ProtocolProfile;
-use crate::profile::PulseDuration;
-use crate::utils::save_audio;
-use crate::utils::save_normalized;
+use crate::protocol::profile::Profile;
+use crate::protocol::profile::SizedPulses;
+use crate::utils::bits_to_string;
+use crate::utils::read_wav_file;
 
 use crate::consts::DB_THRESHOLD;
-use crate::consts::HP_FILTER;
-use crate::consts::LP_FILTER;
 
 pub struct Receiver {
-    profile: ProtocolProfile,
+    profile: Profile,
+    pulses: SizedPulses,
+    spec: AudioSpec,
+    bits: Vec<u8>,
+    buffer: NormSamples,
+    resolver: RxResolver,
+    magnitude: FourierMagnitude,
+    st_idx: Option<usize>,
 }
 
 impl Receiver {
-    pub fn new(profile: ProtocolProfile) -> Self {
-        Receiver { profile }
+    pub fn new(profile: Profile, spec: AudioSpec) -> Self {
+        let pulses: SizedPulses = profile.pulses.into_sized(&spec);
+        let buffer: NormSamples = NormSamples::new();
+        let bits: Vec<u8> = Vec::new();
+        let resolver: RxResolver = RxResolver::new();
+        let magnitude: FourierMagnitude = FourierMagnitude::new(&pulses, &spec);
+        let st_idx: Option<usize> = None;
+        Receiver {
+            profile,
+            pulses,
+            spec,
+            bits,
+            buffer,
+            resolver,
+            magnitude,
+            st_idx,
+        }
     }
 
-    pub fn from_file(&self, filename: &str) -> Option<Vec<u8>> {
-        let (mut samples, spec) = self.read_file(filename);
-        let tsz: usize = self.get_tone_sample_size(&spec);
-        let gsz: usize = self.get_gap_sample_size(&spec);
+    pub fn from_file<P>(profile: Profile, filename: P) -> Self
+    where
+        P: AsRef<Path>,
+    {
+        let (mut buffer, spec) = read_wav_file(filename);
+        buffer.re_normalize(0.1);
 
-        println!("Samples: {}", samples.0.len());
-        println!("Tone Sample Size: {}", tsz);
-        println!("Gap Sample Size: {}", gsz);
+        let pulses: SizedPulses = profile.pulses.into_sized(&spec);
+        let bits: Vec<u8> = Vec::new();
+        let resolver: RxResolver = RxResolver::new();
+        let magnitude: FourierMagnitude = FourierMagnitude::new(&pulses, &spec);
+        let st_idx: Option<usize> = None;
 
-        self.apply_frequency_filters(&mut samples.0, &spec);
-        self.normalize_samples(&mut samples.0, &spec);
+        Self {
+            profile,
+            pulses,
+            spec,
+            bits,
+            buffer,
+            resolver,
+            magnitude,
+            st_idx,
+        }
+    }
 
-        let freq_mag: FourierMagnitude = FourierMagnitude::new(tsz, &spec);
-        let start_index: Option<usize> = self.find_starting_index(&mut samples.0, tsz, &freq_mag);
-        let sample_rate: usize = freq_mag.get_sample_rate();
+    pub fn add_samples(&mut self, samples: &mut NormSamples) {
+        samples.re_normalize(0.1);
+        self.buffer.0.append(&mut samples.0);
+    }
 
-        if let Some(idx) = start_index {
-            let timestamp: f32 = self.get_timestamp(idx, sample_rate);
-            println!("Start Index: {} | Timestamp: {:.3}", idx, timestamp);
-            let (bits, output): (Vec<u8>, Option<RxOutput>) =
-                self.receive_bits(idx, tsz, gsz, &mut samples.0, &freq_mag);
+    pub fn analyze_buffer(&mut self) {
+        let tone_size: usize = self.pulses.tone_size();
 
-            save_normalized(&samples.0, &spec);
-            if let Some(output) = output {
-                if output == RxOutput::End {
-                    return Some(bits);
+        if let Some(st_idx) = self.st_idx {
+            if self.buffer.0.len() > (st_idx + tone_size) {
+                self.read_ahead(st_idx);
+            }
+        } else {
+            if self.buffer.0.len() >= (tone_size * 8) {
+                if let Some(st_idx) = self.find_start_idx() {
+                    self.set_st_idx(st_idx);
+                    println!("# Detected Start Signal");
+                } else {
+                    self.refresh_all_states();
                 }
             }
         }
-        None
+    }
+
+    pub fn save_buffer(&self, filename: &str) {
+        self.buffer.save_file(filename, &self.spec);
     }
 }
 
 impl Receiver {
-    fn get_timestamp(&self, idx: usize, sample_rate: usize) -> f32 {
-        let timestamp = idx as f32 / sample_rate as f32;
-        timestamp
+    fn set_st_idx(&mut self, idx: usize) {
+        self.st_idx = Some(idx);
     }
 
-    fn apply_frequency_filters(&self, samples: &mut [f32], spec: &AudioSpec) {
-        let highpass_frequency: f32 = HP_FILTER;
-        let lowpass_frequency: f32 = LP_FILTER;
-
-        let mut filters: FrequencyPass<'_> = FrequencyPass::new(samples, spec);
-        filters.apply_highpass(highpass_frequency, 0.707);
-        filters.apply_lowpass(lowpass_frequency, 0.707);
-
-        save_audio("processed.wav", &samples, spec);
+    fn unset_st_idx(&mut self) {
+        self.st_idx = None;
     }
 
-    fn find_starting_index(
-        &self,
-        samples: &mut [f32],
-        sample_size: usize,
-        freq_mag: &FourierMagnitude,
-    ) -> Option<usize> {
-        let mut current_best_idx: Option<usize> = None;
-        let mut current_best_magnitude: Option<f32> = None;
+    fn refresh_all_states(&mut self) {
+        self.refresh_buffer();
+        self.bits.clear();
+        self.resolver.reset();
+        self.unset_st_idx();
+    }
+
+    fn refresh_buffer(&mut self) {
+        if let Some(st_idx) = self.st_idx {
+            self.drain_buffer_to_start_index(st_idx)
+        } else {
+            let idx: usize = self.buffer.0.len() - (self.pulses.tone_size() * 8);
+            self.drain_buffer_to_start_index(idx);
+        }
+    }
+
+    fn drain_buffer_to_start_index(&mut self, idx: usize) {
+        if idx < self.buffer.0.len() {
+            self.buffer.0.drain(..idx);
+        } else {
+            self.buffer.0.clear();
+        }
+    }
+
+    fn read_ahead(&mut self, mut st_idx: usize) {
+        let tone_size: usize = self.pulses.tone_size();
+        let gap_size: usize = self.pulses.gap_size();
+        let size_to_next: usize = tone_size + gap_size;
+
+        while (st_idx + tone_size) < self.buffer.0.len() {
+            if let Some(output) = self.receive_bits(st_idx) {
+                match output {
+                    RxOutput::Bit(bit) => {
+                        self.bits.push(bit);
+                        print!("# Bits Received: {}  \r", self.bits.len());
+                    }
+                    RxOutput::End => {
+                        let string: String = bits_to_string(&self.bits);
+                        println!("\n# Decoded Bits: {}\n", string);
+                        return self.refresh_all_states();
+                    }
+                    RxOutput::Error => {
+                        return self.refresh_all_states();
+                    }
+                }
+            }
+            st_idx += size_to_next;
+            self.set_st_idx(st_idx);
+        }
+    }
+
+    fn find_start_idx(&mut self) -> Option<usize> {
+        let mut curr_best_idx: Option<usize> = None;
+        let mut curr_best_magnitude: Option<f32> = None;
         let mut consecutive_fails: usize = 0;
         let max_consecutive_fails: usize = 5;
 
-        let mut idx: usize = 0;
+        let mut st_idx: usize = 0;
         let skip_cycles: usize = 8;
-        let sample_rate: usize = freq_mag.get_sample_rate();
+        let tone_size: usize = self.pulses.tone_size();
 
-        while idx < (samples.len() - sample_size) {
-            let samples_chunk: Vec<f32> = self.get_owned_samples_chunk(samples, idx, sample_size);
-            let start_magnitude = self.get_start_magnitude(&samples_chunk, freq_mag);
+        while st_idx < (self.buffer.0.len() - tone_size) {
+            self.re_normalize_pulse_sized_samples(st_idx);
+            let samples: &[f32] = self.get_pulse_sized_samples(st_idx);
+            let start_magnitude: f32 = self.get_start_magnitude(samples);
 
-            let terminate: bool = self.update_starting_index_search(
-                idx,
+            let terminate: bool = self.start_idx_search(
+                st_idx,
                 start_magnitude,
-                &mut current_best_idx,
-                &mut current_best_magnitude,
+                &mut curr_best_idx,
+                &mut curr_best_magnitude,
                 &mut consecutive_fails,
                 max_consecutive_fails,
             );
+
             if terminate {
                 break;
             }
-            self.update_starting_index(&mut idx, skip_cycles, sample_rate, &current_best_magnitude);
+            self.update_start_idx(&mut st_idx, skip_cycles, &curr_best_magnitude);
         }
-        current_best_idx
+        curr_best_idx
     }
 
-    fn update_starting_index_search(
+    fn start_idx_search(
         &self,
         idx: usize,
         start_magnitude: f32,
-        current_best_idx: &mut Option<usize>,
-        current_best_magnitude: &mut Option<f32>,
+        curr_best_idx: &mut Option<usize>,
+        curr_best_magnitude: &mut Option<f32>,
         consecutive_fails: &mut usize,
         max_consecutive_fails: usize,
     ) -> bool {
-        match current_best_magnitude {
+        match curr_best_magnitude {
             Some(previous_best_magnitude) => {
                 if start_magnitude >= *previous_best_magnitude && start_magnitude <= DB_THRESHOLD {
                     *consecutive_fails = 0;
-                    *current_best_idx = Some(idx);
-                    *current_best_magnitude = Some(start_magnitude);
+                    *curr_best_idx = Some(idx);
+                    *curr_best_magnitude = Some(start_magnitude);
                 } else {
                     if *consecutive_fails == max_consecutive_fails {
                         return true;
@@ -141,124 +217,68 @@ impl Receiver {
             }
             None => {
                 if start_magnitude >= -DB_THRESHOLD && start_magnitude <= DB_THRESHOLD {
-                    *current_best_idx = Some(idx);
-                    *current_best_magnitude = Some(start_magnitude);
+                    *curr_best_idx = Some(idx);
+                    *curr_best_magnitude = Some(start_magnitude);
                 }
             }
         }
         false
     }
 
-    fn update_starting_index(
-        &self,
-        idx: &mut usize,
-        cycles: usize,
-        sample_rate: usize,
-        current_best_magnitude: &Option<f32>,
-    ) {
-        if current_best_magnitude.is_none() {
+    fn update_start_idx(&self, idx: &mut usize, cycles: usize, curr_best_magnitude: &Option<f32>) {
+        if curr_best_magnitude.is_none() {
             let frequency: f32 = self.profile.markers.start.hz();
-            let idx_skip: usize = self.get_minimum_chunk_size(frequency, cycles, sample_rate);
+            let idx_skip: usize = self.get_minimum_chunk_size(frequency, cycles);
             *idx += idx_skip;
         } else {
             *idx += 1;
         }
     }
 
-    fn read_file(&self, filename: &str) -> (NormSamples, AudioSpec) {
-        let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
-        let spec: AudioSpec = reader.spec().into();
-
-        let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
-        let samples: NormSamples = NormSamples::from_i32(&samples, &spec);
-
-        (samples, spec)
+    fn receive_bits(&mut self, st_idx: usize) -> Option<RxOutput> {
+        self.re_normalize_pulse_sized_samples(st_idx);
+        let samples: &[f32] = self.get_pulse_sized_samples(st_idx);
+        let magnitudes: RxMagnitudes = self.get_magnitudes(samples);
+        let output: Option<RxOutput> = self.resolver.resolve(&magnitudes);
+        output
     }
 
-    fn receive_bits(
-        &self,
-        mut idx: usize,
-        tsz: usize,
-        gsz: usize,
-        samples: &mut [f32],
-        freq_mag: &FourierMagnitude,
-    ) -> (Vec<u8>, Option<RxOutput>) {
-        let mut bits: Vec<u8> = Vec::new();
-        let mut resolver: RxResolver = RxResolver::new();
-        let mut last_output: Option<RxOutput> = None;
-
-        while idx + tsz <= samples.len() {
-            let samples_chunk: &mut [f32] = self.get_samples_chunk(samples, idx, tsz);
-            let magnitudes: RxMagnitudes = self.get_magnitudes(&samples_chunk, &freq_mag);
-            let output: Option<RxOutput> = resolver.resolve(&magnitudes);
-            self.mute_samples_gap(samples, idx, tsz, gsz);
-
-            last_output = output.clone();
-            idx += tsz + gsz;
-
-            if let Some(states) = output {
-                match states {
-                    RxOutput::Bit(bit) => bits.push(bit),
-                    RxOutput::End => break,
-                    RxOutput::Error => break,
-                }
-            }
-        }
-        (bits, last_output)
-    }
-
-    fn get_tone_sample_size(&self, spec: &AudioSpec) -> usize {
-        let tone_pulse: &PulseDuration = &self.profile.pulses.tone;
-
-        let sample_rate: usize = spec.sample_rate() as usize;
-        let sample_size: usize = tone_pulse.sample_size::<usize>(sample_rate);
-        sample_size
-    }
-
-    fn get_gap_sample_size(&self, spec: &AudioSpec) -> usize {
-        let gap_pulse: &PulseDuration = &self.profile.pulses.gap;
-
-        let sample_rate: usize = spec.sample_rate() as usize;
-        let sample_size: usize = gap_pulse.sample_size::<usize>(sample_rate);
-        sample_size
-    }
-
-    fn get_start_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+    fn get_start_magnitude(&self, samples: &[f32]) -> f32 {
         let frequency: f32 = self.profile.markers.start.hz();
-        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        let magnitude: f32 = self.magnitude.get_magnitude(samples, frequency);
         magnitude
     }
 
-    fn get_end_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+    fn get_end_magnitude(&self, samples: &[f32]) -> f32 {
         let frequency: f32 = self.profile.markers.end.hz();
-        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        let magnitude: f32 = self.magnitude.get_magnitude(samples, frequency);
         magnitude
     }
 
-    fn get_next_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+    fn get_next_magnitude(&self, samples: &[f32]) -> f32 {
         let frequency: f32 = self.profile.markers.next.hz();
-        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        let magnitude: f32 = self.magnitude.get_magnitude(samples, frequency);
         magnitude
     }
 
-    fn get_high_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+    fn get_high_magnitude(&self, samples: &[f32]) -> f32 {
         let frequency: f32 = self.profile.bits.high.hz();
-        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        let magnitude: f32 = self.magnitude.get_magnitude(samples, frequency);
         magnitude
     }
 
-    fn get_low_magnitude(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> f32 {
+    fn get_low_magnitude(&self, samples: &[f32]) -> f32 {
         let frequency: f32 = self.profile.bits.low.hz();
-        let magnitude: f32 = freq_mag.get_magnitude(samples, frequency);
+        let magnitude: f32 = self.magnitude.get_magnitude(samples, frequency);
         magnitude
     }
 
-    fn get_magnitudes(&self, samples: &[f32], freq_mag: &FourierMagnitude) -> RxMagnitudes {
-        let start_magnitude: f32 = self.get_start_magnitude(samples, freq_mag);
-        let end_magnitude: f32 = self.get_end_magnitude(samples, freq_mag);
-        let next_magnitude: f32 = self.get_next_magnitude(samples, freq_mag);
-        let high_magnitude: f32 = self.get_high_magnitude(samples, freq_mag);
-        let low_magnitude: f32 = self.get_low_magnitude(samples, freq_mag);
+    fn get_magnitudes(&self, samples: &[f32]) -> RxMagnitudes {
+        let start_magnitude: f32 = self.get_start_magnitude(samples);
+        let end_magnitude: f32 = self.get_end_magnitude(samples);
+        let next_magnitude: f32 = self.get_next_magnitude(samples);
+        let high_magnitude: f32 = self.get_high_magnitude(samples);
+        let low_magnitude: f32 = self.get_low_magnitude(samples);
 
         let magnitudes: RxMagnitudes = RxMagnitudes::new(
             start_magnitude,
@@ -269,64 +289,67 @@ impl Receiver {
             DB_THRESHOLD,
         );
 
-        // print_magnitude(&magnitudes);
+        // print_detected_magnitudes(&magnitudes);
         magnitudes
     }
 
-    fn get_minimum_chunk_size(&self, frequency: f32, cycles: usize, sample_rate: usize) -> usize {
+    fn get_minimum_chunk_size(&self, frequency: f32, cycles: usize) -> usize {
         let time_for_one_cycle: f32 = 1.0 / frequency;
         let chunk_time: f32 = cycles as f32 * time_for_one_cycle;
-        (chunk_time * sample_rate as f32).ceil() as usize
+        (chunk_time * self.spec.sample_rate() as f32).ceil() as usize
     }
 
-    fn get_samples_chunk<'a>(
-        &self,
-        samples: &'a mut [f32],
-        idx: usize,
-        sample_size: usize,
-    ) -> &'a mut [f32] {
-        let en_index: usize = idx + sample_size;
-        let en_index: usize = self.clamp_ending_index(samples, en_index);
-        let samples_chunk: &mut [f32] = &mut samples[idx..en_index];
-        self.re_normalize_samples_chunk(samples_chunk);
-        samples_chunk
+    fn get_pulse_sized_samples<'a>(&'a self, st_idx: usize) -> &'a [f32] {
+        let en_idx: usize = st_idx + self.pulses.tone_size();
+        let en_idx: usize = self.clamp_en_idx(en_idx);
+
+        &self.buffer.0[st_idx..en_idx]
     }
 
-    fn mute_samples_gap<'a>(&self, samples: &'a mut [f32], idx: usize, tsz: usize, gsz: usize) {
-        let en_index: usize = idx + tsz + gsz;
-        let en_index: usize = self.clamp_ending_index(samples, en_index);
-        let samples_chunk: &mut [f32] = &mut samples[idx + tsz..en_index];
-        for sample in samples_chunk.iter_mut() {
-            *sample = 0.0;
-        }
+    fn get_mut_pulse_sized_samples<'a>(&'a mut self, st_idx: usize) -> &'a mut [f32] {
+        let en_idx: usize = st_idx + self.pulses.tone_size();
+        let en_idx: usize = self.clamp_en_idx(en_idx);
+
+        &mut self.buffer.0[st_idx..en_idx]
     }
 
-    fn clamp_ending_index(&self, samples: &[f32], index: usize) -> usize {
-        if index > samples.len() {
-            return samples.len();
-        }
-        index
-    }
+    fn re_normalize_pulse_sized_samples<'a>(&'a mut self, st_idx: usize) {
+        let samples: &mut [f32] = self.get_mut_pulse_sized_samples(st_idx);
 
-    fn get_owned_samples_chunk<'a>(
-        &self,
-        samples: &'a [f32],
-        idx: usize,
-        sample_size: usize,
-    ) -> Vec<f32> {
-        let mut samples_chunk: Vec<f32> = samples[idx..(idx + sample_size)].to_vec();
-        self.re_normalize_samples_chunk(&mut samples_chunk);
-        samples_chunk
-    }
-
-    fn normalize_samples(&self, samples: &mut [f32], spec: &AudioSpec) {
-        let bit_depth: usize = spec.bits_per_sample() as usize;
         let mut normalizer: Normalizer<'_> = Normalizer::new(samples);
-        normalizer.normalize(bit_depth, 0.1);
+        normalizer.re_normalize(0.1);
     }
 
-    fn re_normalize_samples_chunk(&self, chunk: &mut [f32]) {
-        let mut normalizer: Normalizer<'_> = Normalizer::new(chunk);
-        normalizer.re_normalize(0.1);
+    fn clamp_en_idx(&self, idx: usize) -> usize {
+        if idx > self.buffer.0.len() {
+            return self.buffer.0.len();
+        }
+        idx
+    }
+}
+
+#[allow(dead_code)]
+fn print_detected_magnitudes(magnitudes: &RxMagnitudes) {
+    let fields: [(&str, f32); 5] = [
+        ("Start", magnitudes.start),
+        ("End", magnitudes.end),
+        ("High", magnitudes.high),
+        ("Low", magnitudes.low),
+        ("Next", magnitudes.next),
+    ];
+
+    let mut printed: bool = false;
+    for (label, value) in fields.iter() {
+        if magnitudes.within_threshold(*value) {
+            if printed {
+                print!(" | ");
+            }
+            print!("{}: {:.2} dB", label, value);
+            printed = true;
+        }
+    }
+
+    if printed {
+        println!();
     }
 }

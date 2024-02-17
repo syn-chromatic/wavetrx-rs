@@ -14,8 +14,8 @@ use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
 
-use wavetrx::profile::ProtocolProfile;
-use wavetrx::protocol::rx::LiveReceiver;
+use wavetrx::protocol::profile::Profile;
+use wavetrx::protocol::rx::Receiver;
 
 use wavetrx::utils::get_default_profile;
 
@@ -55,7 +55,7 @@ pub fn get_mono_audio_spec_i32(config: &SupportedStreamConfig) -> AudioSpec {
     spec
 }
 
-pub fn display_profile(profile: &ProtocolProfile, spec: &AudioSpec) {
+pub fn display_profile(profile: &Profile, spec: &AudioSpec) {
     let min_freq_sep: f32 = profile.min_frequency_separation(spec);
 
     println!("{:?}", profile);
@@ -69,11 +69,10 @@ pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
     print_config(&device, &config);
 
     let spec: AudioSpec = get_mono_audio_spec_i32(&config);
-    let profile: ProtocolProfile = get_default_profile();
+    let profile: Profile = get_default_profile();
     display_profile(&profile, &spec);
 
-    let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
-
+    let mut receiver: Receiver = Receiver::new(profile, spec);
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());
     recorder.record()?;
 
@@ -88,7 +87,8 @@ pub fn live_output_receiver() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            live_receiver.add_samples(&mut sc_samples);
+            receiver.add_samples(&mut sc_samples);
+            receiver.analyze_buffer();
             continue;
         }
         sleep(Duration::from_millis(50));

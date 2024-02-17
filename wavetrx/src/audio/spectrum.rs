@@ -8,24 +8,27 @@ use rustfft::Fft;
 use rustfft::FftPlanner;
 
 use crate::audio::types::AudioSpec;
+use crate::protocol::profile::SizedPulses;
 use crate::utils::get_bit_depth_magnitudes;
 
 pub struct FourierMagnitude {
     fft: Arc<dyn Fft<f32>>,
-    sample_rate: usize,
-    sample_size: usize,
+    pulses: SizedPulses,
+    spec: AudioSpec,
 }
 
 impl FourierMagnitude {
-    pub fn new(sample_size: usize, spec: &AudioSpec) -> Self {
+    pub fn new(pulses: &SizedPulses, spec: &AudioSpec) -> Self {
+        let pulses: SizedPulses = pulses.clone();
+        let spec: AudioSpec = spec.clone();
+
         let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
-        let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(sample_size);
-        let sample_rate: usize = spec.sample_rate() as usize;
+        let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(pulses.tone_size());
 
         FourierMagnitude {
             fft,
-            sample_size,
-            sample_rate,
+            pulses,
+            spec,
         }
     }
 
@@ -34,28 +37,20 @@ impl FourierMagnitude {
         self.fft.process(&mut buffer);
 
         let k: usize = self.get_frequency_bin(target_frequency);
-        let normalization_factor: f32 = 2.0 / self.sample_size as f32;
+        let normalization_factor: f32 = 2.0 / self.pulses.tone_size() as f32;
         let magnitude: f32 = (buffer[k].norm_sqr()).sqrt() * normalization_factor;
         let magnitude_db: f32 = 20.0 * magnitude.log10();
         magnitude_db
     }
 
     pub fn get_frequency_bin(&self, target_frequency: f32) -> usize {
-        let sample_rate: f32 = self.sample_rate as f32;
-        let sample_size: f32 = self.sample_size as f32;
+        let sample_rate: f32 = self.spec.sample_rate() as f32;
+        let sample_size: f32 = self.pulses.tone_size() as f32;
         let normalized_frequency: f32 = target_frequency / sample_rate;
         let scaled_frequency: f32 = sample_size * normalized_frequency;
         let biased_frequency: f32 = 0.5 + scaled_frequency;
         let k: usize = biased_frequency as usize;
         k
-    }
-
-    pub fn get_sample_rate(&self) -> usize {
-        self.sample_rate
-    }
-
-    pub fn get_sample_size(&self) -> usize {
-        self.sample_size
     }
 }
 

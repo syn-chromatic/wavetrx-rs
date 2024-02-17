@@ -13,7 +13,7 @@ use wavetrx::audio::types::AudioSpec;
 use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
 
-use wavetrx::profile::ProtocolProfile;
+use wavetrx::protocol::profile::Profile;
 use wavetrx::protocol::tx::Transmitter;
 
 use wavetrx::utils::get_default_profile;
@@ -67,7 +67,7 @@ pub fn get_mono_audio_spec_f32(config: &SupportedStreamConfig) -> AudioSpec {
     spec
 }
 
-pub fn display_profile(profile: &ProtocolProfile, spec: &AudioSpec) {
+pub fn display_profile(profile: &Profile, spec: &AudioSpec) {
     let min_freq_sep: f32 = profile.min_frequency_separation(spec);
 
     println!("{:?}", profile);
@@ -80,7 +80,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
 
     let spec: AudioSpec = get_mono_audio_spec_f32(&config);
-    let profile: ProtocolProfile = get_default_profile();
+    let profile: Profile = get_default_profile();
     display_profile(&profile, &spec);
 
     let transmitter: Transmitter = Transmitter::new(profile, &spec);
@@ -91,7 +91,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let string: String = input("Input: ");
         if let Ok(samples) = transmit_string(&string, &transmitter) {
-            let samples: NormSamples = NormSamples::from_norm(&samples);
+            let samples: NormSamples = NormSamples::from(&samples);
             player.add_samples(samples);
 
             player.wait();

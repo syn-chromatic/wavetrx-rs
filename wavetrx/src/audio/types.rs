@@ -1,8 +1,20 @@
+use std::collections::LinkedList;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::time::Duration;
+
+use std::fs::File;
+use std::io::BufWriter;
 
 use hound::WavSpec;
-use std::collections::LinkedList;
+use hound::WavWriter;
+
+use super::filters::FrequencyPass;
+use super::spectrum::Normalizer;
+
+use crate::consts::HP_FILTER;
+use crate::consts::LP_FILTER;
 
 pub struct NormSamples(pub Vec<f32>);
 
@@ -22,7 +34,7 @@ impl NormSamples {
         Self { 0: samples }
     }
 
-    pub fn from_norm(samples: &[f32]) -> Self {
+    pub fn from(samples: &[f32]) -> Self {
         let samples: Vec<f32> = samples.to_vec();
         Self { 0: samples }
     }
@@ -37,15 +49,49 @@ impl NormSamples {
         Self { 0: samples }
     }
 
-    pub fn add_norm(&mut self, samples: &[f32]) {
+    pub fn extend(&mut self, samples: &[f32]) {
         self.0.extend(samples);
     }
 
-    pub fn add_i32(&mut self, samples_i32: &[i32], spec: &AudioSpec) {
+    pub fn extend_i32(&mut self, samples_i32: &[i32], spec: &AudioSpec) {
         for sample in samples_i32.iter() {
             let sample: f32 = Self::i32_to_f32(*sample, spec);
             self.0.push(sample);
         }
+    }
+
+    pub fn save_file<P>(&self, filename: P, spec: &AudioSpec)
+    where
+        P: AsRef<Path>,
+    {
+        let wav_spec: WavSpec = (*spec).into();
+        let mut writer: WavWriter<BufWriter<File>> =
+            WavWriter::create(filename, wav_spec).expect("Error creating WAV writer");
+
+        for sample in self.0.iter() {
+            writer.write_sample(*sample).expect("Error writing sample");
+        }
+    }
+}
+
+impl NormSamples {
+    pub fn re_normalize(&mut self, min_floor: f32) {
+        let mut normalizer: Normalizer<'_> = Normalizer::new(&mut self.0);
+        normalizer.re_normalize(min_floor);
+    }
+
+    pub fn highpass_filter(&mut self, q_value: f32, spec: &AudioSpec) {
+        let highpass_frequency: f32 = HP_FILTER;
+
+        let mut filters: FrequencyPass<'_> = FrequencyPass::new(&mut self.0, spec);
+        filters.apply_highpass(highpass_frequency, q_value);
+    }
+
+    pub fn lowpass_filter(&mut self, q_value: f32, spec: &AudioSpec) {
+        let lowpass_frequency: f32 = LP_FILTER;
+
+        let mut filters: FrequencyPass<'_> = FrequencyPass::new(&mut self.0, spec);
+        filters.apply_lowpass(lowpass_frequency, q_value);
     }
 }
 
@@ -87,6 +133,13 @@ impl AudioSpec {
 
     pub fn encoding(&self) -> SampleEncoding {
         self.encoding
+    }
+
+    pub fn sample_timestamp(&self, sample_idx: usize) -> Duration {
+        let secs: f32 = sample_idx as f32 / self.sr as f32;
+        let nanos: u64 = (secs * 1e9) as u64;
+        let timestamp: Duration = Duration::from_nanos(nanos);
+        timestamp
     }
 }
 

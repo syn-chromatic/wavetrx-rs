@@ -16,18 +16,14 @@ use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::audio::spectrum::Normalizer;
 use wavetrx::audio::types::NormSamples;
-use wavetrx::profile::ProtocolProfile;
-use wavetrx::protocol::rx::LiveReceiver;
+use wavetrx::protocol::profile::Profile;
 use wavetrx::protocol::rx::Receiver;
-use wavetrx::utils::save_normalized_name;
 
 use wavetrx::protocol::tx::Transmitter;
 use wavetrx::utils::bits_to_string;
-use wavetrx::utils::read_file;
 use wavetrx::utils::read_wav_file;
 
 use wavetrx::utils::get_default_profile;
-use wavetrx::utils::save_audio;
 
 fn input(prompt: &str) -> String {
     let mut input: String = String::new();
@@ -50,7 +46,7 @@ fn test_transmitter() {
 
     println!("Data: {:?}", data);
 
-    let profile: ProtocolProfile = get_default_profile();
+    let profile: Profile = get_default_profile();
 
     let spec: AudioSpec = AudioSpec::new(48_000, 32, 1, SampleEncoding::F32);
     let transmitter: Transmitter = Transmitter::new(profile, &spec);
@@ -62,56 +58,6 @@ fn test_transmitter() {
     }
 
     println!("Generated {} bytes", data.len());
-}
-
-#[test]
-fn test_receiver() {
-    let filename: &str = "transmitted_audio.wav";
-
-    let profile: ProtocolProfile = get_default_profile();
-    let receiver: Receiver = Receiver::new(profile);
-
-    let bits: Option<Vec<u8>> = receiver.from_file(filename);
-
-    if let Some(bits) = bits {
-        println!("{}", "-".repeat(20));
-        println!();
-        for bit in bits.iter() {
-            print!("{}", bit);
-        }
-        println!();
-
-        let string: String = bits_to_string(&bits);
-        println!("Decoded: {}", string);
-        println!();
-        println!("{}", "-".repeat(20));
-    }
-}
-
-#[test]
-fn test_live_receiver() {
-    let filename: &str = "transmitted_audio.wav";
-
-    let (mut samples, spec) = read_file(filename);
-    let spec: AudioSpec = spec.into();
-    let profile: ProtocolProfile = get_default_profile();
-
-    let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
-    let sample_size = live_receiver.get_sample_size();
-    let sample_size: usize = 44;
-
-    let mut idx = 0;
-    while idx + sample_size < samples.len() {
-        let timestamp = idx as f32 / spec.sample_rate() as f32;
-        // println!("Timestamp: {:.3}", timestamp);
-        let en_index: usize = idx + sample_size;
-        let samples_chunk: &mut [f32] = &mut samples[idx..en_index];
-        let mut samples: NormSamples = NormSamples::from_norm(&samples_chunk);
-        live_receiver.add_samples(&mut samples);
-        idx += sample_size;
-    }
-
-    // live_receiver.save("live_receiver_output.wav");
 }
 
 #[test]
@@ -136,8 +82,8 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
 
     let spec: AudioSpec = AudioSpec::new(sample_rate, 32, 1, SampleEncoding::I32);
 
-    let profile: ProtocolProfile = get_default_profile();
-    let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
+    let profile: Profile = get_default_profile();
+    let mut receiver: Receiver = Receiver::new(profile, spec);
     let recorded_samples: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
     let recorded_samples_arc: Arc<Mutex<Vec<f32>>> = recorded_samples.clone();
 
@@ -152,8 +98,9 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            let mut samples: NormSamples = NormSamples::from_norm(&samples);
-            live_receiver.add_samples(&mut samples);
+            let mut samples: NormSamples = NormSamples::from(&samples);
+            receiver.add_samples(&mut samples);
+            receiver.analyze_buffer();
             // recorded_samples_arc.lock().unwrap().append(&mut samples);
         },
         move |err| {
@@ -195,8 +142,8 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
 
     let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::I32);
 
-    let profile: ProtocolProfile = get_default_profile();
-    let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
+    let profile: Profile = get_default_profile();
+    let mut receiver: Receiver = Receiver::new(profile, spec);
 
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());
     recorder.record()?;
@@ -217,8 +164,9 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
 
             frames.extend(samples.0);
 
-            let mut samples: NormSamples = NormSamples::from_norm(&sc_samples);
-            live_receiver.add_samples(&mut samples);
+            let mut samples: NormSamples = NormSamples::from(&sc_samples);
+            receiver.add_samples(&mut samples);
+            receiver.analyze_buffer();
         }
 
         if frames.len() >= 1_000_000 {
@@ -226,7 +174,8 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    save_normalized_name("record_audio_test.wav", &frames, &spec);
+    let samples: NormSamples = NormSamples::from(&frames);
+    samples.save_file("record_audio_test.wav", &spec);
     println!("Done");
 
     // std::thread::sleep(std::time::Duration::from_secs(180));
@@ -256,8 +205,8 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
 
     let spec: AudioSpec = AudioSpec::new(sample_rate, bits_per_sample, 1, SampleEncoding::I32);
 
-    let profile: ProtocolProfile = get_default_profile();
-    let mut live_receiver: LiveReceiver = LiveReceiver::new(profile, spec);
+    let profile: Profile = get_default_profile();
+    let mut receiver: Receiver = Receiver::new(profile, spec);
 
     let mut recorder: InputRecorder = InputRecorder::new(device, config.into());
     recorder.record()?;
@@ -278,8 +227,9 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
 
             // samples.extend(samples.0);
 
-            let mut samples: NormSamples = NormSamples::from_norm(&sc_samples);
-            live_receiver.add_samples(&mut samples);
+            let mut samples: NormSamples = NormSamples::from(&sc_samples);
+            receiver.add_samples(&mut samples);
+            receiver.analyze_buffer();
         }
 
         // if samples.len() >= 500_000 {
@@ -325,8 +275,8 @@ fn test_player() -> Result<(), Box<dyn std::error::Error>> {
     println!("WAV Sample Rate: {}", spec.sample_rate());
     println!("WAV Channels: {}", spec.channels());
 
-    println!("ALL SAMPLES: {}", samples.len());
-    for sample in samples {
+    println!("ALL SAMPLES: {}", samples.0.len());
+    for sample in samples.0 {
         player.add_sample(sample);
     }
 
