@@ -1,9 +1,44 @@
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RxState {
     Start,
     End,
     Next,
     Bit,
+    Unset,
+}
+
+impl RxState {
+    pub fn is_start(&self) -> bool {
+        if self == &RxState::Start {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_bit(&self) -> bool {
+        if self == &RxState::Bit {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_start_or_bit(&self) -> bool {
+        if self.is_start() || self.is_bit() {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_next(&self) -> bool {
+        if self == &RxState::Next {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,6 +46,7 @@ pub enum RxOutput {
     Bit(u8),
     End,
     Error,
+    Undefined,
 }
 
 pub struct RxMagnitudes {
@@ -34,94 +70,135 @@ impl RxMagnitudes {
         }
     }
 
+    pub fn prominent_bit(&self) -> u8 {
+        (self.high > self.low) as u8
+    }
+
+    pub fn prominent_bit_magnitude(&self) -> f32 {
+        if self.prominent_bit() == 1 {
+            self.high
+        } else {
+            self.low
+        }
+    }
+
     pub fn within_threshold(&self, value: f32) -> bool {
         value >= -self.threshold && value <= self.threshold
     }
 
-    pub fn state_within_threshold(&self, state: &RxState) -> bool {
-        match state {
-            RxState::Start => self.within_threshold(self.start),
-            RxState::End => self.within_threshold(self.end),
-            RxState::Next => self.within_threshold(self.next),
-            RxState::Bit => self.within_threshold(self.high) || self.within_threshold(self.low),
-        }
+    pub fn within_threshold_from_state(&self, state: &RxState) -> bool {
+        let value: f32 = match state {
+            RxState::Start => self.start,
+            RxState::End => self.end,
+            RxState::Next => self.next,
+            RxState::Bit => self.prominent_bit_magnitude(),
+            RxState::Unset => return false,
+        };
+        self.within_threshold(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct RxMarker {
+    marker: (RxState, RxState),
+}
+
+impl RxMarker {
+    pub fn new() -> Self {
+        let marker: (RxState, RxState) = (RxState::Unset, RxState::Unset);
+        Self { marker }
     }
 
-    pub fn prominent_bit(&self) -> u8 {
-        if self.high > self.low {
-            return 1;
-        }
-        0
+    pub fn with_expectation(expectation: RxState) -> Self {
+        let marker: (RxState, RxState) = (RxState::Unset, expectation);
+        Self { marker }
+    }
+
+    pub fn selection(&self) -> &RxState {
+        &self.marker.0
+    }
+
+    pub fn expectation(&self) -> &RxState {
+        &self.marker.1
+    }
+
+    pub fn set_selection(&mut self, state: RxState) {
+        self.marker.0 = state;
+    }
+
+    pub fn set_expectation(&mut self, state: RxState) {
+        self.marker.1 = state;
+    }
+
+    pub fn unset_selection(&mut self) {
+        self.marker.0 = RxState::Unset;
+    }
+
+    pub fn unset_expectation(&mut self) {
+        self.marker.1 = RxState::Unset;
     }
 }
 
 #[derive(Debug)]
 pub struct RxResolver {
-    selection: Option<RxState>,
-    expectation: RxState,
-    end_selection: Option<RxState>,
-    end_expectation: Option<RxState>,
+    c_marker: RxMarker,
+    e_marker: RxMarker,
 }
 
 impl RxResolver {
     pub fn new() -> Self {
-        let selection: Option<RxState> = None;
-        let expectation: RxState = RxState::Start;
-        let end_selection: Option<RxState> = None;
-        let end_expectation: Option<RxState> = None;
-        RxResolver {
-            selection,
-            expectation,
-            end_selection,
-            end_expectation,
-        }
+        let c_marker: RxMarker = RxMarker::with_expectation(RxState::Start);
+        let e_marker: RxMarker = RxMarker::new();
+
+        RxResolver { c_marker, e_marker }
     }
 
-    pub fn resolve(&mut self, magnitudes: &RxMagnitudes) -> Option<RxOutput> {
-        let end_evaluation: bool = self.evaluate_end(magnitudes);
-        let evaluation: bool = magnitudes.state_within_threshold(&self.expectation);
+    pub fn resolve(&mut self, magnitudes: &RxMagnitudes) -> RxOutput {
+        let has_expectation: bool = self.evaluate_expectation(magnitudes);
+        let has_end: bool = self.evaluate_end(magnitudes);
 
-        let end_resolve: Option<RxOutput> =
-            self.resolve_end(magnitudes, end_evaluation, evaluation);
-        if end_resolve.is_some() {
+        if let Some(end_resolve) = self.resolve_end(magnitudes, has_expectation, has_end) {
             return end_resolve;
         }
 
-        if evaluation {
-            self.set_expectation();
+        if has_expectation {
+            self.update_expectation();
 
-            if self.expectation == RxState::Next {
-                if let Some(selection) = &self.selection {
-                    if *selection == RxState::Bit {
-                        let bit: u8 = magnitudes.prominent_bit();
-                        return Some(RxOutput::Bit(bit));
-                    }
-                }
+            let selection: &RxState = self.c_marker.selection();
+            let expectation: &RxState = self.c_marker.expectation();
+
+            if selection.is_bit() && expectation.is_next() {
+                let bit: u8 = magnitudes.prominent_bit();
+                return RxOutput::Bit(bit);
             }
-        } else if !evaluation && !end_evaluation {
-            return Some(RxOutput::Error);
+        } else if !has_expectation && !has_end {
+            return RxOutput::Error;
         }
-        None
+        RxOutput::Undefined
     }
 
     pub fn reset(&mut self) {
-        self.selection = None;
-        self.expectation = RxState::Start;
-        self.end_selection = None;
-        self.end_expectation = None;
+        self.c_marker.unset_selection();
+        self.c_marker.set_expectation(RxState::Start);
+        self.e_marker.unset_selection();
+        self.e_marker.unset_expectation();
     }
 }
 
 impl RxResolver {
-    fn set_expectation(&mut self) {
-        if self.expectation == RxState::Start || self.expectation == RxState::Bit {
-            self.selection = Some(self.expectation.clone());
-            self.expectation = RxState::Next;
-        } else if self.expectation == RxState::Next {
-            if let Some(selection) = &self.selection {
-                if *selection == RxState::Start || *selection == RxState::Bit {
-                    self.expectation = RxState::Bit;
-                }
+    fn evaluate_expectation(&mut self, magnitudes: &RxMagnitudes) -> bool {
+        magnitudes.within_threshold_from_state(&self.c_marker.expectation())
+    }
+
+    fn update_expectation(&mut self) {
+        let expectation: &RxState = self.c_marker.expectation();
+
+        if expectation.is_start_or_bit() {
+            self.c_marker.set_selection(*expectation);
+            self.c_marker.set_expectation(RxState::Next);
+        } else if expectation.is_next() {
+            if self.c_marker.selection().is_start_or_bit() {
+                self.c_marker.set_expectation(RxState::Bit);
             }
         }
     }
@@ -129,32 +206,30 @@ impl RxResolver {
     fn resolve_end(
         &mut self,
         magnitudes: &RxMagnitudes,
-        end_evaluation: bool,
-        evaluation: bool,
+        has_expectation: bool,
+        has_end: bool,
     ) -> Option<RxOutput> {
-        if !end_evaluation {
-            if let Some(end_expectation) = &self.end_expectation {
-                let end_evaluation = magnitudes.state_within_threshold(end_expectation);
-                if end_evaluation && !evaluation {
-                    return Some(RxOutput::End);
-                } else {
-                    self.end_selection = None;
-                    self.end_expectation = None;
-                }
+        if !has_end {
+            let end_expectation: &RxState = self.e_marker.expectation();
+            let has_end_expectation: bool = magnitudes.within_threshold_from_state(end_expectation);
+            if has_end_expectation && !has_expectation {
+                return Some(RxOutput::End);
             }
+
+            self.e_marker.unset_selection();
+            self.e_marker.unset_expectation();
         }
         None
     }
 
     fn evaluate_end(&mut self, magnitudes: &RxMagnitudes) -> bool {
-        if self.expectation == RxState::Bit {
-            if let Some(selection) = &self.selection {
-                if *selection == RxState::Bit {
-                    if magnitudes.state_within_threshold(&RxState::End) {
-                        self.end_selection = Some(RxState::End);
-                        self.end_expectation = Some(RxState::Next);
-                        return true;
-                    }
+        let expectation: &RxState = self.c_marker.expectation();
+        if expectation.is_bit() {
+            if self.c_marker.selection().is_bit() {
+                if magnitudes.within_threshold_from_state(&RxState::End) {
+                    self.e_marker.set_selection(RxState::End);
+                    self.e_marker.set_expectation(RxState::Next);
+                    return true;
                 }
             }
         }
