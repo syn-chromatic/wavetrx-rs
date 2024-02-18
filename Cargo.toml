@@ -1,2 +1,7 @@
 [workspace]
+resolver = "2"
 members = ["wavetrx", "wavetrx-transmitter", "wavetrx-receiver"]
+
+
+[profile.release]
+opt-level = 3

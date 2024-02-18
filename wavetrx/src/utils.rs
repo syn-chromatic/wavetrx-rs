@@ -13,6 +13,7 @@ use crate::protocol::profile::Profile;
 use crate::protocol::profile::Pulses;
 
 use crate::consts::DefaultProfile;
+use crate::consts::FastProfile;
 
 pub fn get_default_profile() -> Profile {
     let markers: Markers = Markers::new(
@@ -25,6 +26,19 @@ pub fn get_default_profile() -> Profile {
         DefaultProfile::PULSE_LENGTH_US,
         DefaultProfile::PULSE_GAP_US,
     );
+
+    let profile: Profile = Profile::new(markers, bits, pulses);
+    profile
+}
+
+pub fn get_fast_profile() -> Profile {
+    let markers: Markers = Markers::new(
+        FastProfile::MARKER_TONE_START,
+        FastProfile::MARKER_TONE_END,
+        FastProfile::MARKER_TONE_NEXT,
+    );
+    let bits: Bits = Bits::new(FastProfile::BIT_TONE_HIGH, FastProfile::BIT_TONE_LOW);
+    let pulses: Pulses = Pulses::new(FastProfile::PULSE_LENGTH_US, FastProfile::PULSE_GAP_US);
 
     let profile: Profile = Profile::new(markers, bits, pulses);
     profile

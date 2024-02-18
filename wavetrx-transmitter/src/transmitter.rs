@@ -1,5 +1,6 @@
 use std::io;
 use std::io::Write;
+use std::time::Duration;
 
 use cpal::Device;
 use cpal::Host;
@@ -16,7 +17,7 @@ use wavetrx::audio::types::SampleEncoding;
 use wavetrx::protocol::profile::Profile;
 use wavetrx::protocol::tx::Transmitter;
 
-use wavetrx::utils::get_default_profile;
+use wavetrx::utils::get_fast_profile;
 
 fn input(prompt: &str) -> String {
     let mut input: String = String::new();
@@ -80,7 +81,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
 
     let spec: AudioSpec = get_mono_audio_spec_f32(&config);
-    let profile: Profile = get_default_profile();
+    let profile: Profile = get_fast_profile();
     display_profile(&profile, &spec);
 
     let transmitter: Transmitter = Transmitter::new(profile, &spec);
@@ -92,6 +93,8 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
         let string: String = input("Input: ");
         if let Ok(samples) = transmit_string(&string, &transmitter) {
             let samples: NormSamples = NormSamples::from(&samples);
+            let timestamp: Duration = spec.sample_timestamp(samples.0.len());
+            println!("Length: {:?}s", timestamp.as_millis() as f32 / 1e3);
             player.add_samples(samples);
 
             player.wait();

@@ -11,7 +11,3 @@ hound = "3.5"
 rustfft = "6.2"
 biquad = "0.3"
 cpal = "0.15"
-
-
-[profile.release]
-opt-level = 1
