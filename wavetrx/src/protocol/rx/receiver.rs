@@ -111,19 +111,25 @@ impl Receiver {
     }
 
     fn refresh_all_states(&mut self) {
-        self.refresh_buffer();
-        self.bits.clear();
+        self.drain_buffer();
+        self.clear_bits();
         self.resolver.reset();
         self.unset_st_idx();
     }
 
-    fn refresh_buffer(&mut self) {
+    fn drain_buffer(&mut self) {
         if let Some(st_idx) = self.st_idx {
             self.drain_buffer_to_start_index(st_idx)
         } else {
             let idx: usize = self.buffer.0.len() - (self.pulses.tone_size() * 8);
             self.drain_buffer_to_start_index(idx);
         }
+        self.buffer.0.shrink_to_fit();
+    }
+
+    fn clear_bits(&mut self) {
+        self.bits.clear();
+        self.bits.shrink_to_fit();
     }
 
     fn drain_buffer_to_start_index(&mut self, idx: usize) {
