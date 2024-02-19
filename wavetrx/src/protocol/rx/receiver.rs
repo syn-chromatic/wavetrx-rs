@@ -52,7 +52,7 @@ impl Receiver {
         P: AsRef<Path>,
     {
         let (mut buffer, spec) = read_wav_file(filename);
-        buffer.re_normalize(0.1);
+        buffer.normalize(1.0, 0.1);
 
         let pulses: SizedPulses = profile.pulses.into_sized(&spec);
         let bits: Vec<u8> = Vec::new();
@@ -73,7 +73,7 @@ impl Receiver {
     }
 
     pub fn add_samples(&mut self, samples: &mut NormSamples) {
-        samples.re_normalize(0.1);
+        samples.normalize(1.0, 0.1);
         self.buffer.0.append(&mut samples.0);
     }
 
@@ -313,7 +313,7 @@ impl Receiver {
         let samples: &mut [f32] = self.get_mut_pulse_sized_samples(st_idx);
 
         let mut normalizer: Normalizer<'_> = Normalizer::new(samples);
-        normalizer.re_normalize(0.1);
+        normalizer.normalize_floor(1.0, 0.1);
     }
 
     fn get_pulse_sized_en_idx(&self, st_idx: usize) -> usize {

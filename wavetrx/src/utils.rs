@@ -5,7 +5,6 @@ use std::path::Path;
 use hound::WavReader;
 
 use crate::audio::types::AudioSpec;
-use crate::audio::types::IntoBitDepth;
 use crate::audio::types::NormSamples;
 use crate::protocol::profile::Bits;
 use crate::protocol::profile::Markers;
@@ -42,13 +41,6 @@ pub fn get_fast_profile() -> Profile {
 
     let profile: Profile = Profile::new(markers, bits, pulses);
     profile
-}
-
-pub fn get_bit_depth_magnitudes<T: IntoBitDepth>(source: T) -> (f32, f32) {
-    let bit_depth: u32 = source.into_bit_depth();
-    let positive_magnitude: f32 = ((2i32.pow(bit_depth - 1)) - 1) as f32;
-    let negative_magnitude: f32 = -positive_magnitude - 1.0;
-    (positive_magnitude, negative_magnitude)
 }
 
 fn bits_to_bytes(bits: &Vec<u8>) -> Vec<u8> {

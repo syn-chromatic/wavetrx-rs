@@ -75,9 +75,9 @@ impl NormSamples {
 }
 
 impl NormSamples {
-    pub fn re_normalize(&mut self, min_floor: f32) {
+    pub fn normalize(&mut self, ceiling: f32, floor: f32) {
         let mut normalizer: Normalizer<'_> = Normalizer::new(&mut self.0);
-        normalizer.re_normalize(min_floor);
+        normalizer.normalize_floor(ceiling, floor);
     }
 
     pub fn highpass_filter(&mut self, q_value: f32, spec: &AudioSpec) {
@@ -133,6 +133,12 @@ impl AudioSpec {
 
     pub fn encoding(&self) -> SampleEncoding {
         self.encoding
+    }
+
+    pub fn get_magnitudes(&self) -> (i32, i32) {
+        let positive_magnitude: i32 = (2i32.pow((self.bps - 1) as u32)) - 1;
+        let negative_magnitude: i32 = -positive_magnitude - 1;
+        (positive_magnitude, negative_magnitude)
     }
 
     pub fn sample_timestamp(&self, sample_idx: usize) -> Duration {
@@ -247,39 +253,5 @@ impl Scalar for f32 {
     }
     fn to_f32(&self) -> f32 {
         *self
-    }
-}
-
-pub trait IntoBitDepth {
-    fn into_bit_depth(self) -> u32;
-}
-
-impl IntoBitDepth for usize {
-    fn into_bit_depth(self) -> u32 {
-        self as u32
-    }
-}
-
-impl IntoBitDepth for WavSpec {
-    fn into_bit_depth(self) -> u32 {
-        self.bits_per_sample as u32
-    }
-}
-
-impl IntoBitDepth for &WavSpec {
-    fn into_bit_depth(self) -> u32 {
-        self.bits_per_sample as u32
-    }
-}
-
-impl IntoBitDepth for AudioSpec {
-    fn into_bit_depth(self) -> u32 {
-        self.bits_per_sample() as u32
-    }
-}
-
-impl IntoBitDepth for &AudioSpec {
-    fn into_bit_depth(self) -> u32 {
-        self.bits_per_sample() as u32
     }
 }

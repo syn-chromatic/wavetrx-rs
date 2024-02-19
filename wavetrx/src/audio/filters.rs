@@ -74,7 +74,7 @@ impl<'a> FrequencyPass<'a> {
 }
 
 #[test]
-fn test_function() {
+fn test_filter() {
     use super::types::NormSamples;
     use super::types::SampleEncoding;
     use hound::WavReader;
