@@ -2,14 +2,12 @@ use std::cmp::Ordering;
 use std::f32::consts;
 use std::sync::Arc;
 
-use hound::WavSpec;
 use rustfft::num_complex::Complex;
 use rustfft::Fft;
 use rustfft::FftPlanner;
 
 use crate::audio::types::AudioSpec;
 use crate::protocol::profile::SizedPulses;
-use crate::utils::get_bit_depth_magnitudes;
 
 pub struct FourierMagnitude {
     fft: Arc<dyn Fft<f32>>,
@@ -25,11 +23,7 @@ impl FourierMagnitude {
         let mut planner: FftPlanner<f32> = FftPlanner::<f32>::new();
         let fft: Arc<dyn Fft<f32>> = planner.plan_fft_forward(pulses.tone_size());
 
-        FourierMagnitude {
-            fft,
-            pulses,
-            spec,
-        }
+        FourierMagnitude { fft, pulses, spec }
     }
 
     pub fn get_magnitude(&self, samples: &[f32], target_frequency: f32) -> f32 {
@@ -55,18 +49,16 @@ impl FourierMagnitude {
 }
 
 pub struct GoertzelMagnitude {
-    sample_rate: usize,
-    sample_size: usize,
+    pulses: SizedPulses,
+    spec: AudioSpec,
 }
 
 impl GoertzelMagnitude {
-    pub fn new(sample_size: usize, spec: WavSpec) -> Self {
-        let sample_rate: usize = spec.sample_rate as usize;
+    pub fn new(pulses: &SizedPulses, spec: &AudioSpec) -> Self {
+        let pulses: SizedPulses = pulses.clone();
+        let spec: AudioSpec = spec.clone();
 
-        GoertzelMagnitude {
-            sample_size,
-            sample_rate,
-        }
+        GoertzelMagnitude { pulses, spec }
     }
 
     pub fn get_magnitude(&self, samples: &[f32], target_frequency: f32) -> f32 {
@@ -93,21 +85,13 @@ impl GoertzelMagnitude {
     }
 
     pub fn get_frequency_bin(&self, target_frequency: f32) -> usize {
-        let sample_rate: f32 = self.sample_rate as f32;
-        let sample_size: f32 = self.sample_size as f32;
+        let sample_rate: f32 = self.spec.sample_rate() as f32;
+        let sample_size: f32 = self.pulses.tone_size() as f32;
         let normalized_frequency: f32 = target_frequency / sample_rate;
         let scaled_frequency: f32 = sample_size * normalized_frequency;
         let biased_frequency: f32 = 0.5 + scaled_frequency;
         let k: usize = biased_frequency as usize;
         k
-    }
-
-    pub fn get_sample_rate(&self) -> usize {
-        self.sample_rate
-    }
-
-    pub fn get_sample_size(&self) -> usize {
-        self.sample_size
     }
 }
 
@@ -120,95 +104,41 @@ impl<'a> Normalizer<'a> {
         Normalizer { samples }
     }
 
-    pub fn normalize(&mut self, bit_depth: usize, min_floor: f32) {
-        let (mut positive, mut negative): (f32, f32) = self.find_max_magnitudes();
-        let (p_min, n_min): (f32, f32) = self.get_normalization_mins(bit_depth, min_floor);
-        self.clamp_max_magnitudes(&mut positive, &mut negative, p_min, n_min);
+    pub fn normalize(&mut self, ceiling: f32) {
+        let (mut p_max, mut n_max): (f32, f32) = self.find_max_magnitudes();
+        let (p_min, n_min): (f32, f32) = (0.0, 0.0);
 
-        for sample in self.samples.iter_mut() {
-            if sample.is_normal() {
-                if sample.is_sign_positive() {
-                    *sample /= positive
-                } else if sample.is_sign_negative() {
-                    *sample /= negative.abs()
-                };
-            }
-        }
+        p_max /= ceiling;
+        n_max /= ceiling;
+
+        self.normalize_samples(p_max, n_max, p_min, n_min);
     }
 
-    pub fn re_normalize(&mut self, min_floor: f32) {
-        let (mut positive, mut negative): (f32, f32) = self.find_max_magnitudes();
-        let (p_min, n_min): (f32, f32) = (min_floor, -min_floor);
-        self.clamp_max_magnitudes(&mut positive, &mut negative, p_min, n_min);
+    pub fn normalize_floor(&mut self, ceiling: f32, floor: f32) {
+        let (mut p_max, mut n_max): (f32, f32) = self.find_max_magnitudes();
+        let (p_min, n_min): (f32, f32) = (floor, -floor);
 
-        for sample in self.samples.iter_mut() {
-            if sample.is_normal() {
-                if sample.is_sign_positive() {
-                    *sample /= positive
-                } else if sample.is_sign_negative() {
-                    *sample /= negative.abs()
-                };
-            }
-        }
-    }
+        p_max /= ceiling;
+        n_max /= ceiling;
 
-    pub fn de_normalize(&mut self, bit_depth: usize) {
-        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(bit_depth);
-
-        for sample in self.samples.iter_mut() {
-            if sample.is_normal() {
-                if sample.is_sign_positive() {
-                    *sample *= p_magnitude;
-                } else if sample.is_sign_negative() {
-                    *sample *= n_magnitude.abs();
-                }
-            }
-        }
-    }
-
-    pub fn update_samples(&mut self, samples: &'a mut [f32]) {
-        self.samples = samples;
-    }
-
-    pub fn to_i32(&self) -> Vec<i32> {
-        let samples_f32: &[f32] = &*self.samples;
-        let samples_i32: Vec<i32> = samples_f32.into_iter().map(|x| *x as i32).collect();
-        samples_i32
+        self.normalize_samples(p_max, n_max, p_min, n_min);
     }
 }
 
 impl<'a> Normalizer<'a> {
-    fn get_normalization_mins(&self, bit_depth: usize, min_floor: f32) -> (f32, f32) {
-        let (p_magnitude, n_magnitude): (f32, f32) = get_bit_depth_magnitudes(bit_depth);
-        let p_min: f32 = p_magnitude * min_floor;
-        let n_min: f32 = n_magnitude * min_floor;
-        (p_min, n_min)
-    }
-
-    fn clamp_max_magnitudes(&self, positive: &mut f32, negative: &mut f32, p_min: f32, n_min: f32) {
-        if *positive < p_min {
-            *positive = f32::INFINITY;
-        }
-        if *negative > n_min {
-            *negative = f32::NEG_INFINITY;
+    fn normalize_samples(&mut self, p_max: f32, n_max: f32, p_min: f32, n_min: f32) {
+        for sample in self.samples.iter_mut() {
+            if sample.is_normal() {
+                if sample.is_sign_positive() {
+                    Self::normalize_positive(sample, p_max, p_min);
+                } else if sample.is_sign_negative() {
+                    Self::normalize_negative(sample, n_max, n_min);
+                };
+            }
         }
     }
 
-    fn find_max_magnitudes(&self) -> (f32, f32) {
-        let positive_magnitude: &f32 = self
-            .samples
-            .iter()
-            .max_by(Self::positive_comparison)
-            .unwrap();
-        let negative_magnitude: &f32 = self
-            .samples
-            .iter()
-            .max_by(Self::negative_comparison)
-            .unwrap();
-        (*positive_magnitude, *negative_magnitude)
-    }
-
-    fn positive_comparison(a: &&f32, b: &&f32) -> Ordering {
+    fn compare_positive(a: &&f32, b: &&f32) -> Ordering {
         match (a.is_sign_positive(), b.is_sign_positive()) {
             (true, false) => Ordering::Greater,
             (false, true) => Ordering::Less,
@@ -217,7 +147,7 @@ impl<'a> Normalizer<'a> {
         }
     }
 
-    fn negative_comparison(a: &&f32, b: &&f32) -> Ordering {
+    fn compare_negative(a: &&f32, b: &&f32) -> Ordering {
         match (a.is_sign_negative(), b.is_sign_negative()) {
             (true, false) => Ordering::Greater,
             (false, true) => Ordering::Less,
@@ -225,4 +155,51 @@ impl<'a> Normalizer<'a> {
             (false, false) => Ordering::Equal,
         }
     }
+
+    fn normalize_positive(sample: &mut f32, p_max: f32, p_min: f32) {
+        if *sample < p_min {
+            *sample = 0.0;
+        } else {
+            *sample /= p_max
+        }
+    }
+
+    fn normalize_negative(sample: &mut f32, n_max: f32, n_min: f32) {
+        if *sample > n_min {
+            *sample = 0.0;
+        } else {
+            *sample /= n_max.abs();
+        }
+    }
+
+    fn find_max_magnitudes(&self) -> (f32, f32) {
+        let p_max: &f32 = self.samples.iter().max_by(Self::compare_positive).unwrap();
+        let n_max: &f32 = self.samples.iter().max_by(Self::compare_negative).unwrap();
+        (*p_max, *n_max)
+    }
+}
+
+#[test]
+fn test_normalizer() {
+    use super::types::NormSamples;
+    use super::types::SampleEncoding;
+    use hound::WavReader;
+    use std::fs::File;
+    use std::io::BufReader;
+
+    let filename: &str = "two_tone.wav";
+    let mut reader: WavReader<BufReader<File>> = WavReader::open(filename).unwrap();
+    let spec: AudioSpec = reader.spec().into();
+
+    println!("{:?}", spec);
+
+    let samples: Vec<i32> = reader.samples::<i32>().map(Result::unwrap).collect();
+    let mut samples: NormSamples = NormSamples::from_i32(&samples, &spec);
+
+    let mut normalizer: Normalizer<'_> = Normalizer::new(&mut samples.0);
+    normalizer.normalize_floor(0.9, 0.85);
+
+    let spec: AudioSpec =
+        AudioSpec::new(spec.sample_rate(), 32, spec.channels(), SampleEncoding::F32);
+    samples.save_file("test_normalizer.wav", &spec);
 }

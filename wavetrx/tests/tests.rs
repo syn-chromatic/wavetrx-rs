@@ -49,7 +49,7 @@ fn test_transmitter() {
     let profile: Profile = get_default_profile();
 
     let spec: AudioSpec = AudioSpec::new(48_000, 32, 1, SampleEncoding::F32);
-    let transmitter: Transmitter = Transmitter::new(profile, &spec);
+    let transmitter: Transmitter = Transmitter::new(&profile, &spec);
     let result: Result<(), Box<dyn std::error::Error>> = transmitter.create_file(filename, data);
 
     if let Err(err) = result {
@@ -98,7 +98,7 @@ fn test_live_recording_receiver() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            let mut samples: NormSamples = NormSamples::from(&samples);
+            let mut samples: NormSamples = NormSamples::from_slice(&samples);
             receiver.add_samples(&mut samples);
             receiver.analyze_buffer();
             // recorded_samples_arc.lock().unwrap().append(&mut samples);
@@ -164,7 +164,7 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
 
             frames.extend(samples.0);
 
-            let mut samples: NormSamples = NormSamples::from(&sc_samples);
+            let mut samples: NormSamples = NormSamples::from_slice(&sc_samples);
             receiver.add_samples(&mut samples);
             receiver.analyze_buffer();
         }
@@ -174,7 +174,7 @@ fn test_live_recording_receiver2() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let samples: NormSamples = NormSamples::from(&frames);
+    let samples: NormSamples = NormSamples::from_slice(&frames);
     samples.save_file("record_audio_test.wav", &spec);
     println!("Done");
 
@@ -227,7 +227,7 @@ pub fn test_live_recording_receiver3() -> Result<(), Box<dyn std::error::Error>>
 
             // samples.extend(samples.0);
 
-            let mut samples: NormSamples = NormSamples::from(&sc_samples);
+            let mut samples: NormSamples = NormSamples::from_slice(&sc_samples);
             receiver.add_samples(&mut samples);
             receiver.analyze_buffer();
         }

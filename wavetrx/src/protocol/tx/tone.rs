@@ -1,4 +1,5 @@
 use std::f32::consts;
+use std::mem;
 
 use crate::audio::types::AudioSpec;
 
@@ -8,15 +9,21 @@ pub struct ToneGenerator {
 }
 
 impl ToneGenerator {
-    pub fn new(spec: AudioSpec) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(spec: &AudioSpec) -> Result<Self, Box<dyn std::error::Error>> {
         let samples: Vec<f32> = Vec::new();
+        let spec: AudioSpec = *spec;
 
-        let tone_generator: ToneGenerator = ToneGenerator { samples, spec };
-        Ok(tone_generator)
+        Ok(ToneGenerator { samples, spec })
     }
 
     pub fn samples(self) -> Vec<f32> {
         self.samples
+    }
+
+    pub fn take_samples(&mut self) -> Vec<f32> {
+        let samples_len: usize = self.samples.len();
+        let samples: Vec<f32> = mem::replace(&mut self.samples, Vec::with_capacity(samples_len));
+        samples
     }
 
     pub fn append_tone(
@@ -41,12 +48,12 @@ impl ToneGenerator {
         &mut self,
         frequency: f32,
         duration: usize,
-        fade_ratio: f32,
+        fade: f32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let sample_rate: usize = self.spec.sample_rate() as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
         let period: f32 = sample_rate as f32 / frequency;
-        let fade_size: usize = (sample_size as f32 * fade_ratio) as usize;
+        let fade_size: usize = (sample_size as f32 * fade) as usize;
 
         for idx in 0..sample_size {
             let mut sine_norm: f32 = self.get_sine_norm(idx, period);
@@ -61,12 +68,12 @@ impl ToneGenerator {
         &mut self,
         frequency: f32,
         duration: usize,
-        fade_ratio: f32,
+        fade: f32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let sample_rate: usize = self.spec.sample_rate() as usize;
         let sample_size: usize = ((sample_rate * duration) / 1_000_000) as usize;
         let period: f32 = sample_rate as f32 / frequency;
-        let fade_size: usize = (sample_size as f32 * fade_ratio) as usize;
+        let fade_size: usize = (sample_size as f32 * fade) as usize;
 
         for idx in 0..sample_size {
             let mut sine_norm: f32 = self.get_sine_norm(idx, period);

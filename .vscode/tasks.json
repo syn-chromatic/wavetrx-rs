@@ -17,8 +17,12 @@
   "inputs": [
     {
       "id": "variableInput",
-      "type": "promptString",
-      "description": "Enter the value for VARIABLE"
+      "type": "pickString",
+      "description": "Select bin to run",
+      "options": [
+        "wavetrx-transmitter",
+        "wavetrx-receiver",
+      ],
     }
   ]
 }

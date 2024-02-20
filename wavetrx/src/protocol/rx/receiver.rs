@@ -52,7 +52,7 @@ impl Receiver {
         P: AsRef<Path>,
     {
         let (mut buffer, spec) = read_wav_file(filename);
-        buffer.re_normalize(0.1);
+        buffer.normalize(1.0, 0.1);
 
         let pulses: SizedPulses = profile.pulses.into_sized(&spec);
         let bits: Vec<u8> = Vec::new();
@@ -73,7 +73,7 @@ impl Receiver {
     }
 
     pub fn add_samples(&mut self, samples: &mut NormSamples) {
-        samples.re_normalize(0.1);
+        samples.normalize(1.0, 0.1);
         self.buffer.0.append(&mut samples.0);
     }
 
@@ -111,19 +111,25 @@ impl Receiver {
     }
 
     fn refresh_all_states(&mut self) {
-        self.refresh_buffer();
-        self.bits.clear();
+        self.drain_buffer();
+        self.clear_bits();
         self.resolver.reset();
         self.unset_st_idx();
     }
 
-    fn refresh_buffer(&mut self) {
+    fn drain_buffer(&mut self) {
         if let Some(st_idx) = self.st_idx {
             self.drain_buffer_to_start_index(st_idx)
         } else {
             let idx: usize = self.buffer.0.len() - (self.pulses.tone_size() * 8);
             self.drain_buffer_to_start_index(idx);
         }
+        self.buffer.0.shrink_to_fit();
+    }
+
+    fn clear_bits(&mut self) {
+        self.bits.clear();
+        self.bits.shrink_to_fit();
     }
 
     fn drain_buffer_to_start_index(&mut self, idx: usize) {
@@ -140,22 +146,22 @@ impl Receiver {
         let size_to_next: usize = tone_size + gap_size;
 
         while (st_idx + tone_size) < self.buffer.0.len() {
-            if let Some(output) = self.receive_bits(st_idx) {
-                match output {
-                    RxOutput::Bit(bit) => {
-                        self.bits.push(bit);
-                        print!("# Bits Received: {}  \r", self.bits.len());
-                    }
-                    RxOutput::End => {
-                        let string: String = bits_to_string(&self.bits);
-                        println!("\n# Decoded Bits: {}\n", string);
-                        return self.refresh_all_states();
-                    }
-                    RxOutput::Error => {
-                        return self.refresh_all_states();
-                    }
+            match self.receive_bits(st_idx) {
+                RxOutput::Bit(bit) => {
+                    self.bits.push(bit);
+                    print!("# Bits Received: {}  \r", self.bits.len());
                 }
+                RxOutput::End => {
+                    let string: String = bits_to_string(&self.bits);
+                    println!("\n# Decoded Bits: {}\n", string);
+                    return self.refresh_all_states();
+                }
+                RxOutput::Error => {
+                    return self.refresh_all_states();
+                }
+                RxOutput::Undefined => {}
             }
+
             st_idx += size_to_next;
             self.set_st_idx(st_idx);
         }
@@ -235,11 +241,11 @@ impl Receiver {
         }
     }
 
-    fn receive_bits(&mut self, st_idx: usize) -> Option<RxOutput> {
+    fn receive_bits(&mut self, st_idx: usize) -> RxOutput {
         self.re_normalize_pulse_sized_samples(st_idx);
         let samples: &[f32] = self.get_pulse_sized_samples(st_idx);
         let magnitudes: RxMagnitudes = self.get_magnitudes(samples);
-        let output: Option<RxOutput> = self.resolver.resolve(&magnitudes);
+        let output: RxOutput = self.resolver.resolve(&magnitudes);
         output
     }
 
@@ -300,16 +306,12 @@ impl Receiver {
     }
 
     fn get_pulse_sized_samples<'a>(&'a self, st_idx: usize) -> &'a [f32] {
-        let en_idx: usize = st_idx + self.pulses.tone_size();
-        let en_idx: usize = self.clamp_en_idx(en_idx);
-
+        let en_idx: usize = self.get_pulse_sized_en_idx(st_idx);
         &self.buffer.0[st_idx..en_idx]
     }
 
     fn get_mut_pulse_sized_samples<'a>(&'a mut self, st_idx: usize) -> &'a mut [f32] {
-        let en_idx: usize = st_idx + self.pulses.tone_size();
-        let en_idx: usize = self.clamp_en_idx(en_idx);
-
+        let en_idx: usize = self.get_pulse_sized_en_idx(st_idx);
         &mut self.buffer.0[st_idx..en_idx]
     }
 
@@ -317,14 +319,15 @@ impl Receiver {
         let samples: &mut [f32] = self.get_mut_pulse_sized_samples(st_idx);
 
         let mut normalizer: Normalizer<'_> = Normalizer::new(samples);
-        normalizer.re_normalize(0.1);
+        normalizer.normalize_floor(1.0, 0.1);
     }
 
-    fn clamp_en_idx(&self, idx: usize) -> usize {
-        if idx > self.buffer.0.len() {
+    fn get_pulse_sized_en_idx(&self, st_idx: usize) -> usize {
+        let en_idx: usize = st_idx + self.pulses.tone_size();
+        if en_idx > self.buffer.0.len() {
             return self.buffer.0.len();
         }
-        idx
+        en_idx
     }
 }
 
