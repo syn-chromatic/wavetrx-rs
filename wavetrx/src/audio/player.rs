@@ -1,5 +1,7 @@
 use std::error;
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
@@ -52,7 +54,15 @@ impl OutputPlayer {
     }
 
     pub fn wait(&self) {
-        while !self.buffer.buffer_empty() {}
+        let buffer_len: usize = self.buffer.buffer_len();
+        let timestamp: Duration = self.spec.sample_timestamp(buffer_len);
+        sleep(timestamp);
+    }
+
+    pub fn wait_until(&self, remaining_size: usize) {
+        let buffer_len: usize = self.buffer.buffer_len();
+        let timestamp: Duration = self.spec.sample_timestamp(buffer_len - remaining_size);
+        sleep(timestamp);
     }
 }
 

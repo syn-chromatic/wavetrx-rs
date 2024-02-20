@@ -34,8 +34,12 @@ impl NormSamples {
         Self { 0: samples }
     }
 
-    pub fn from(samples: &[f32]) -> Self {
+    pub fn from_slice(samples: &[f32]) -> Self {
         let samples: Vec<f32> = samples.to_vec();
+        Self { 0: samples }
+    }
+
+    pub fn from_vec(samples: Vec<f32>) -> Self {
         Self { 0: samples }
     }
 
@@ -229,6 +233,13 @@ impl SampleBuffer {
             return buffer_guard.is_empty();
         }
         false
+    }
+
+    pub fn buffer_len(self: &Arc<Self>) -> usize {
+        if let Ok(buffer_guard) = self.buffer.read() {
+            return buffer_guard.len();
+        }
+        0
     }
 }
 

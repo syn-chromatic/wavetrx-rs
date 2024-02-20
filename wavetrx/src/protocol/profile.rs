@@ -13,6 +13,7 @@ impl Frequency {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct PulseDuration(Duration);
 
 impl PulseDuration {
@@ -97,6 +98,7 @@ impl Into<PulseDuration> for Duration {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Markers {
     pub start: Frequency,
     pub end: Frequency,
@@ -112,6 +114,7 @@ impl Markers {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Bits {
     pub high: Frequency,
     pub low: Frequency,
@@ -132,6 +135,7 @@ impl Bits {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Pulses {
     pub tone: PulseDuration,
     pub gap: PulseDuration,
@@ -169,7 +173,7 @@ impl Pulses {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone)]
 pub struct SizedPulses {
     tone_size: usize,
     gap_size: usize,
@@ -185,6 +189,7 @@ impl SizedPulses {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Profile {
     pub markers: Markers,
     pub bits: Bits,

@@ -15,6 +15,7 @@ use wavetrx::audio::types::NormSamples;
 use wavetrx::audio::types::SampleEncoding;
 
 use wavetrx::protocol::profile::Profile;
+use wavetrx::protocol::tx::StreamTransmitter;
 use wavetrx::protocol::tx::Transmitter;
 
 use wavetrx::utils::get_fast_profile;
@@ -84,7 +85,7 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     let profile: Profile = get_fast_profile();
     display_profile(&profile, &spec);
 
-    let transmitter: Transmitter = Transmitter::new(profile, &spec);
+    let transmitter: Transmitter = Transmitter::new(&profile, &spec);
 
     let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
     player.play()?;
@@ -92,13 +93,40 @@ pub fn transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let string: String = input("Input: ");
         if let Ok(samples) = transmit_string(&string, &transmitter) {
-            let samples: NormSamples = NormSamples::from(&samples);
+            let samples: NormSamples = NormSamples::from_slice(&samples);
             let timestamp: Duration = spec.sample_timestamp(samples.0.len());
             println!("Length: {:?}s", timestamp.as_millis() as f32 / 1e3);
             player.add_samples(samples);
 
             player.wait();
             println!();
+        }
+    }
+}
+
+pub fn stream_transmitter_player() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n[Transmitter]\n");
+    let (device, config): (Device, SupportedStreamConfig) = get_default_output_device()?;
+
+    let spec: AudioSpec = get_mono_audio_spec_f32(&config);
+    let profile: Profile = get_fast_profile();
+    display_profile(&profile, &spec);
+
+    let mut player: OutputPlayer = OutputPlayer::new(device, config.into(), spec);
+    player.play()?;
+
+    const TX_BUFFER: usize = 256;
+
+    loop {
+        let string: String = input("Input: ");
+        let data: &[u8] = string.as_bytes();
+        let stream_transmitter: StreamTransmitter<'_, TX_BUFFER> =
+            StreamTransmitter::new(&profile, &spec, data);
+
+        for stream_samples in stream_transmitter {
+            let stream_samples: NormSamples = NormSamples::from_vec(stream_samples);
+            player.add_samples(stream_samples);
+            player.wait_until(4096);
         }
     }
 }
